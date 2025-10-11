@@ -1,0 +1,8 @@
+# FastAPI and dependencies
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+pydantic==2.10.3
+pydantic-settings==2.6.1
+
+# Python environment
+python-dotenv==1.0.1
