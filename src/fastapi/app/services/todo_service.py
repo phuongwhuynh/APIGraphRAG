@@ -1,28 +1,29 @@
 """
 Todo service - business logic for todo operations
-Handles the coordination between routers and data storage
+Handles the coordination between routers and database using SQLAlchemy
 """
 
 from datetime import datetime
 from typing import Optional
 from fastapi import HTTPException
+from sqlalchemy.orm import Session
 
-from ..models.todo import Todo, TodoStatus, TodoPriority
+from ..models.todo import TodoStatus, TodoPriority
+from ..models.todo_db import TodoDB
 from ..schemas.todo import TodoCreate, TodoUpdate, TodoStats
 
 
 class TodoService:
-    """Service for todo business logic"""
+    """Service for todo business logic with SQLite database"""
 
-    def __init__(self, db: dict[int, Todo]):
+    def __init__(self, db: Session):
         """
-        Initialize service with database
+        Initialize service with database session
 
         Args:
-            db: Dictionary storing todos (in-memory database)
+            db: SQLAlchemy database session
         """
         self.db = db
-        self._next_id = max(db.keys(), default=0) + 1
 
     def get_all_todos(
         self,
@@ -31,7 +32,7 @@ class TodoService:
         status: Optional[TodoStatus] = None,
         priority: Optional[TodoPriority] = None,
         search: Optional[str] = None
-    ) -> tuple[list[Todo], int]:
+    ) -> tuple[list[TodoDB], int]:
         """
         Get all todos with optional filtering
 
@@ -45,28 +46,25 @@ class TodoService:
         Returns:
             Tuple of (list of todos, total count)
         """
-        todos = list(self.db.values())
+        query = self.db.query(TodoDB)
 
-        # Apply filters
         if status:
-            todos = [t for t in todos if t.status == status]
+            query = query.filter(TodoDB.status == status.value)
         if priority:
-            todos = [t for t in todos if t.priority == priority]
+            query = query.filter(TodoDB.priority == priority.value)
         if search:
-            search_lower = search.lower()
-            todos = [
-                t for t in todos
-                if search_lower in t.title.lower()
-                or (t.description and search_lower in t.description.lower())
-            ]
+            search_pattern = f"%{search}%"
+            query = query.filter(
+                (TodoDB.title.ilike(search_pattern)) |
+                (TodoDB.description.ilike(search_pattern))
+            )
 
-        # Sort by updated_at descending
-        todos.sort(key=lambda x: x.updated_at, reverse=True)
+        total = query.count()
+        todos = query.order_by(TodoDB.updated_at.desc()).offset(skip).limit(limit).all()
 
-        total = len(todos)
-        return todos[skip : skip + limit], total
+        return todos, total
 
-    def get_todo_by_id(self, todo_id: int) -> Todo:
+    def get_todo_by_id(self, todo_id: int) -> TodoDB:
         """
         Get a todo by ID
 
@@ -79,12 +77,12 @@ class TodoService:
         Raises:
             HTTPException: If todo not found
         """
-        todo = self.db.get(todo_id)
+        todo = self.db.query(TodoDB).filter(TodoDB.id == todo_id).first()
         if not todo:
             raise HTTPException(status_code=404, detail=f"Todo {todo_id} not found")
         return todo
 
-    def create_todo(self, todo_data: TodoCreate) -> Todo:
+    def create_todo(self, todo_data: TodoCreate) -> TodoDB:
         """
         Create a new todo
 
@@ -94,20 +92,22 @@ class TodoService:
         Returns:
             Created todo
         """
-        todo = Todo(
-            id=self._next_id,
+        tags_str = ",".join(todo_data.tags) if todo_data.tags else None
+
+        todo = TodoDB(
             title=todo_data.title,
             description=todo_data.description,
-            priority=todo_data.priority,
-            tags=todo_data.tags,
+            priority=todo_data.priority.value,
+            tags=tags_str,
             created_by=todo_data.created_by,
         )
 
-        self.db[todo.id] = todo
-        self._next_id += 1
+        self.db.add(todo)
+        self.db.commit()
+        self.db.refresh(todo)
         return todo
 
-    def update_todo(self, todo_id: int, todo_data: TodoUpdate) -> Todo:
+    def update_todo(self, todo_id: int, todo_data: TodoUpdate) -> TodoDB:
         """
         Update an existing todo
 
@@ -122,21 +122,26 @@ class TodoService:
             HTTPException: If todo not found
         """
         todo = self.get_todo_by_id(todo_id)
-
-        # Update fields if provided
         update_dict = todo_data.model_dump(exclude_unset=True)
 
         for field, value in update_dict.items():
-            setattr(todo, field, value)
-
-        # Handle status change to completed
-        if "status" in update_dict:
-            if update_dict["status"] == TodoStatus.COMPLETED:
-                todo.completed_at = datetime.utcnow()
-            elif todo.status != TodoStatus.COMPLETED:
-                todo.completed_at = None
+            if field == "status" and value:
+                setattr(todo, field, value.value)
+                if value == TodoStatus.COMPLETED:
+                    todo.completed_at = datetime.utcnow()
+                elif todo.status != TodoStatus.COMPLETED.value:
+                    todo.completed_at = None
+            elif field == "priority" and value:
+                setattr(todo, field, value.value)
+            elif field == "tags" and value is not None:
+                setattr(todo, field, ",".join(value) if value else None)
+            elif value is not None:
+                setattr(todo, field, value)
 
         todo.updated_at = datetime.utcnow()
+
+        self.db.commit()
+        self.db.refresh(todo)
         return todo
 
     def delete_todo(self, todo_id: int) -> None:
@@ -149,9 +154,9 @@ class TodoService:
         Raises:
             HTTPException: If todo not found
         """
-        if todo_id not in self.db:
-            raise HTTPException(status_code=404, detail=f"Todo {todo_id} not found")
-        del self.db[todo_id]
+        todo = self.get_todo_by_id(todo_id)
+        self.db.delete(todo)
+        self.db.commit()
 
     def delete_completed_todos(self) -> int:
         """
@@ -160,15 +165,11 @@ class TodoService:
         Returns:
             Number of deleted todos
         """
-        completed_ids = [
-            todo.id for todo in self.db.values()
-            if todo.status == TodoStatus.COMPLETED
-        ]
-
-        for todo_id in completed_ids:
-            del self.db[todo_id]
-
-        return len(completed_ids)
+        result = self.db.query(TodoDB).filter(
+            TodoDB.status == TodoStatus.COMPLETED.value
+        ).delete()
+        self.db.commit()
+        return result
 
     def get_statistics(self) -> TodoStats:
         """
@@ -177,25 +178,24 @@ class TodoService:
         Returns:
             TodoStats object
         """
-        todos = list(self.db.values())
-        total = len(todos)
+        total = self.db.query(TodoDB).count()
 
-        # Count by status
         by_status = {}
         for status in TodoStatus:
-            by_status[status.value] = sum(1 for t in todos if t.status == status)
+            count = self.db.query(TodoDB).filter(TodoDB.status == status.value).count()
+            by_status[status.value] = count
 
-        # Count by priority
         by_priority = {}
         for priority in TodoPriority:
-            by_priority[priority.value] = sum(1 for t in todos if t.priority == priority)
+            count = self.db.query(TodoDB).filter(TodoDB.priority == priority.value).count()
+            by_priority[priority.value] = count
 
-        # Count completed today
         today = datetime.utcnow().date()
-        completed_today = sum(
-            1 for t in todos
-            if t.completed_at and t.completed_at.date() == today
-        )
+        completed_today = self.db.query(TodoDB).filter(
+            TodoDB.status == TodoStatus.COMPLETED.value,
+            TodoDB.completed_at != None,
+            TodoDB.completed_at >= datetime.combine(today, datetime.min.time())
+        ).count()
 
         return TodoStats(
             total=total,

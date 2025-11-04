@@ -5,11 +5,22 @@ A simple, clean REST API for managing todos
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
+from .app.routers import todo_router
+from .database import init_db
 
-from app.routers import todo_router
 
-# Create FastAPI app
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Initialize database on startup
+    """
+    init_db()
+    yield
+
+
 app = FastAPI(
+    lifespan=lifespan,
     title="Todo API",
     description="""
     A simple and clean REST API for managing todo items.
@@ -34,7 +45,6 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -43,7 +53,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers
 app.include_router(todo_router.router)
 
 
