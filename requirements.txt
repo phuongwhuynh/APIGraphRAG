@@ -10,3 +10,6 @@ python-dotenv
 
 # Parser and agent
 libcst
+
+#llm
+google-genai

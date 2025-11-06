@@ -22,6 +22,17 @@ class Analyzer(cst.CSTVisitor):
         #                 print("Raise code:", cst.Module([subnode]).code.strip())
 
 
+def analyze_folder(folder_path: str):
+    results = {"functions": [], "imports": {}, "calls": []}
+
+    for path in Path(folder_path).rglob("*.py"):
+        results["imports"][str(path)] = {}
+        code = path.read_text()
+        wrapper = cst.MetadataWrapper(cst.parse_module(code))
+        wrapper.visit(Analyzer(str(path), results))
+
+    return results
+
 module = cst.parse_module(code_file)
 wrapper = cst.MetadataWrapper(module)
 wrapper.visit(Analyzer())
