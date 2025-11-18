@@ -13,3 +13,5 @@ libcst
 
 #llm
 google-genai
+networkx
+langchain
