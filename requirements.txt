@@ -9,6 +9,7 @@ sqlalchemy
 python-dotenv
 
 # Parser and agent
+jedi
 libcst
 
 #llm
