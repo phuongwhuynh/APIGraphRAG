@@ -186,51 +186,80 @@ class SemanticVisitor(cst.CSTVisitor):
 # 5. Route Finder for REST APIs
 # -----------------------------
 class OASRouteFinder:
-    FLASK_DECORATOR = re.compile(r".*\.route\(")
-    FASTAPI_DECORATOR = re.compile(r".*\.(get|post|put|patch|delete)\(")
+    FASTAPI_DECORATOR = re.compile(r"(app|router)\.(get|post|put|patch|delete)\s*\(")
+    ROUTER_PREFIX = re.compile(r"APIRouter\s*\(\s*prefix\s*=\s*['\"]([^'\"]+)['\"]")
 
     def __init__(self, nodes: List[Dict]):
+        self.nodes = nodes
+        self.router_prefix_map = self._build_router_prefix_map()
         self.functions = [f for f in nodes if f["type"] == "function"]
 
+    # ---------- 1. Detect router prefixes ----------
+    def _build_router_prefix_map(self) -> Dict[str, str]:
+        prefix_map = {}
+
+        for n in self.nodes:
+            if n["type"] != "module":
+                continue
+
+            file = n["id"].replace("module:", "")
+            try:
+                with open(file, "r", encoding="utf-8") as f:
+                    code = f.read()
+
+                for m in self.ROUTER_PREFIX.finditer(code):
+                    prefix_map[file] = m.group(1)
+
+            except Exception:
+                pass
+
+        return prefix_map
+
+    # ---------- 2. Main route detection ----------
     def find_routes(self) -> List[Dict[str, Any]]:
         routes = []
+
         for func in self.functions:
             for deco in func.get("decorators", []):
-                # Flask
-                if self.FLASK_DECORATOR.match(deco):
-                    methods = self.extract_methods(deco)
-                    routes.append(
-                        {
-                            "framework": "flask",
-                            "path": self.extract_path(deco),
-                            "methods": methods,
-                            "handler": func,
-                        }
-                    )
-                # FastAPI
-                elif self.FASTAPI_DECORATOR.match(deco):
-                    method = deco.split(".")[-1].split("(")[0].upper()
-                    routes.append(
-                        {
-                            "framework": "fastapi",
-                            "path": self.extract_path(deco),
-                            "methods": [method],
-                            "handler": func,
-                        }
-                    )
+
+                m = self.FASTAPI_DECORATOR.search(deco)
+                if not m:
+                    continue
+
+                framework, method = m.groups()
+                method = method.strip().upper()
+
+                path = self.extract_path(deco)
+
+                # ✅ Apply router prefix if present
+                file = func["file"]
+                prefix = self.router_prefix_map.get(file, "")
+
+                if path == "":
+                    full_path = prefix or "/"
+                else:
+                    full_path = prefix + path
+
+                routes.append(
+                    {
+                        "framework": "fastapi",
+                        "path": full_path,
+                        "methods": [method],
+                        "handler": func,
+                    }
+                )
+
         return routes
 
+    # ---------- 3. Path extraction ----------
     @staticmethod
     def extract_path(deco: str) -> str:
-        m = re.search(r'["\'](.+?)["\']', deco)
-        return m.group(1) if m else "/"
-
-    @staticmethod
-    def extract_methods(deco: str) -> List[str]:
-        m = re.search(r"methods\s*=\s*\[([^\]]+)\]", deco)
-        if m:
-            return [x.strip().strip("'\"") for x in m.group(1).split(",")]
-        return ["GET"]
+        """
+        Extracts FIRST string argument of decorator.
+        Works for multi-line decorators.
+        """
+        m = re.search(r'\(\s*["\']([^"\']*)["\']', deco, re.DOTALL)
+        return m.group(1) if m else ""
 
 
 # -----------------------------
@@ -242,9 +271,8 @@ class OASGenerator:
         self.edges = edges
         self.llm = llm_client
 
-    # flexible, replace with local LLM or other service
-    def summarize_route(self, route: Dict) -> str:
-        print("Summarizing route:", route["path"])
+    def summarize_route(self, route: Dict) -> Dict:
+        print("Generating OAS for route:", route["path"])
 
         try:
             handler_file = route["handler"]["file"]
@@ -253,17 +281,40 @@ class OASGenerator:
 
             with open(handler_file, "r", encoding="utf-8") as f:
                 lines = f.readlines()
+
             code_snippet = "".join(lines[start_line - 1 : end_line])
+
         except Exception as e:
             code_snippet = f"# Could not read code: {e}"
 
-        prompt = (
-            f"Explain what this REST API handler does in simple terms:\n\n"
-            f"Path: {route.get('path')}\n"
-            f"Method: {', '.join(route.get('method', []))}\n"
-            f"Handler name: {route['handler']['name']}\n"
-            f"Code:\n{code_snippet}"
-        )
+        prompt = f"""
+        You are an OpenAPI 3.0 generator.
+
+        Generate a SINGLE OpenAPI OPERATION OBJECT in VALID JSON
+        for the following REST API handler.
+
+        Rules:
+        - Output ONLY valid JSON
+        - Start with {{ and end with }}
+        - No markdown, no comments, no extra text
+        - Must include: summary, description, responses
+        - May include: parameters, requestBody, tags, security
+        - Use path params as "in": "path"
+        - Use query params as "in": "query"
+        - Use body as "requestBody"
+        - If missing info, make reasonable REST assumptions
+
+        API Path: {route["path"]}
+        HTTP Method: {route["methods"][0]}
+        Handler: {route["handler"]["name"]}
+
+        Python Code:
+        {code_snippet}
+        Generate ONLY a valid JSON OpenAPI operation object.
+        Do NOT use markdown, backticks, or extra text.
+        Start with {{ and end with }}.
+
+    """
 
         try:
             response = client.models.generate_content(
@@ -273,32 +324,72 @@ class OASGenerator:
                     thinking_config=types.ThinkingConfig(thinking_budget=0)
                 ),
             )
-            return response.text.strip()
+
+            raw_text = response.text.strip()
+            start, end = raw_text.find("{"), raw_text.rfind("}")
+            if start == -1 or end == -1:
+                raise ValueError("No JSON in LLM output")
+
+            oas_operation = json.loads(raw_text)
+
+            required_fields = ["summary", "description", "responses"]
+            for f in required_fields:
+                if f not in oas_operation:
+                    raise ValueError(f"LLM output missing required field: {f}")
+
+            oas_operation["x-code-trace"] = {
+                "file": handler_file,
+                "start_line": start_line,
+                "end_line": end_line,
+            }
+
+            return oas_operation
+
         except Exception as e:
-            return f"Could not summarize route: {e}"
+            print("LLM OAS generation failed:", e)
+
+            return {
+                "summary": route["handler"]["name"],
+                "description": "Auto-generated fallback description",
+                "responses": {"200": {"description": "Successful Response"}},
+                "x-code-trace": {
+                    "file": route["handler"]["file"],
+                    "start_line": route["handler"].get("start"),
+                    "end_line": route["handler"].get("end"),
+                },
+            }
 
     def generate_oas(self, routes: List[Dict]) -> Dict:
+
         oas = {
             "openapi": "3.0.0",
             "info": {"title": "Project API", "version": "1.0.0"},
             "paths": {},
         }
+
         for r in routes:
             path = r["path"]
+
+            llm_operation: dict = self.summarize_route(r)
+
             if path not in oas["paths"]:
                 oas["paths"][path] = {}
-            summary = self.summarize_route(r)
+
             for method in r["methods"]:
-                oas["paths"][path][method.lower()] = {
-                    "summary": summary,
-                    "operationId": r["handler"]["name"],
-                    "responses": {"200": {"description": "Successful Response"}},
-                    "x-code-trace": {
-                        "file": r["handler"]["file"],
-                        "start_line": r["handler"].get("start"),
-                        "end_line": r["handler"].get("end"),
-                    },
+                method = method.lower()
+
+                oas["paths"][path][method] = llm_operation
+
+                oas["paths"][path][method]["x-code-trace"] = {
+                    "file": r["handler"]["file"],
+                    "start_line": r["handler"].get("start"),
+                    "end_line": r["handler"].get("end"),
                 }
+
+                oas["paths"][path][method].setdefault(
+                    "operationId", r["handler"]["name"]
+                )
+
         return oas
 
 
