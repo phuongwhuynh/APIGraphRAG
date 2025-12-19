@@ -16,3 +16,4 @@ libcst
 google-genai
 networkx
 langchain
+ollama
