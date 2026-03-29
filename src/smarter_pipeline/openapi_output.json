@@ -1,0 +1,319 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/get_full_name": {
+      "get": {
+        "summary": "/get_full_name",
+        "parameters": [
+          {
+            "name": "node",
+            "in": "query",
+            "description": ""
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "x-trace": {
+              "file": "src/graph_rag_pipeline.py",
+              "line": 107,
+              "code": "return None"
+            }
+          }
+        }
+      }
+    },
+    "/get_db": {
+      "get": {
+        "summary": "/get_db",
+        "parameters": [],
+        "responses": {}
+      }
+    },
+    "/get_statistics": {
+      "get": {
+        "summary": "/get_statistics",
+        "parameters": [
+          {
+            "name": "self",
+            "in": "query",
+            "description": ""
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "x-trace": {
+              "file": "src/fastapi/app/services/todo_service.py",
+              "line": 200,
+              "code": "return TodoStats(\n    total=total,\n    by_status=by_status,\n    by_priority=by_priority,\n    completed_today=completed_today,\n)"
+            }
+          }
+        }
+      }
+    },
+    "/get_todo": {
+      "get": {
+        "summary": "/get_todo",
+        "parameters": [
+          {
+            "name": "todo_id",
+            "in": "query",
+            "description": ""
+          },
+          {
+            "name": "service",
+            "in": "query",
+            "description": ""
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "x-trace": {
+              "file": "src/fastapi/app/models/todo.py",
+              "line": 58,
+              "code": "return {\n    \"id\": self.id,\n    \"title\": self.title,\n    \"description\": self.description,\n    \"status\": self.status.value if isinstance(self.status, TodoStatus) else self.status,\n    \"priority\": self.priority.value if isinstance(self.priority, TodoPriority) else self.priority,\n    \"tags\": self.tags,\n    \"created_by\": self.created_by,\n    \"created_at\": self.created_at.isoformat() if isinstance(self.created_at, datetime) else self.created_at,\n    \"updated_at\": self.updated_at.isoformat() if isinstance(self.updated_at, datetime) else self.updated_at,\n    \"completed_at\": self.completed_at.isoformat() if self.completed_at and isinstance(self.completed_at, datetime) else self.completed_at,\n}"
+            }
+          },
+          "404": {
+            "description": "",
+            "x-trace": {
+              "file": "src/fastapi/app/services/todo_service.py",
+              "line": 82,
+              "code": "raise HTTPException(status_code=404, detail=f\"Todo {todo_id} not found\")"
+            }
+          }
+        }
+      }
+    },
+    "/create_todo": {
+      "get": {
+        "summary": "/create_todo",
+        "parameters": [
+          {
+            "name": "self",
+            "in": "query",
+            "description": ""
+          },
+          {
+            "name": "todo_data",
+            "in": "query",
+            "description": ""
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "x-trace": {
+              "file": "src/fastapi/app/services/todo_service.py",
+              "line": 108,
+              "code": "return todo"
+            }
+          }
+        }
+      }
+    },
+    "/update_todo": {
+      "get": {
+        "summary": "/update_todo",
+        "parameters": [
+          {
+            "name": "self",
+            "in": "query",
+            "description": ""
+          },
+          {
+            "name": "todo_id",
+            "in": "query",
+            "description": ""
+          },
+          {
+            "name": "todo_data",
+            "in": "query",
+            "description": ""
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "x-trace": {
+              "file": "src/fastapi/app/services/todo_service.py",
+              "line": 83,
+              "code": "return todo"
+            }
+          },
+          "404": {
+            "description": "",
+            "x-trace": {
+              "file": "src/fastapi/app/services/todo_service.py",
+              "line": 82,
+              "code": "raise HTTPException(status_code=404, detail=f\"Todo {todo_id} not found\")"
+            }
+          }
+        }
+      }
+    },
+    "/delete_todo": {
+      "get": {
+        "summary": "/delete_todo",
+        "parameters": [
+          {
+            "name": "self",
+            "in": "query",
+            "description": ""
+          },
+          {
+            "name": "todo_id",
+            "in": "query",
+            "description": ""
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "",
+            "x-trace": {
+              "file": "src/fastapi/app/services/todo_service.py",
+              "line": 82,
+              "code": "raise HTTPException(status_code=404, detail=f\"Todo {todo_id} not found\")"
+            }
+          },
+          "200": {
+            "description": "",
+            "x-trace": {
+              "file": "src/fastapi/app/services/todo_service.py",
+              "line": 83,
+              "code": "return todo"
+            }
+          }
+        }
+      }
+    },
+    "/delete_completed_todos": {
+      "get": {
+        "summary": "/delete_completed_todos",
+        "parameters": [
+          {
+            "name": "self",
+            "in": "query",
+            "description": ""
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "x-trace": {
+              "file": "src/fastapi/app/services/todo_service.py",
+              "line": 172,
+              "code": "return result"
+            }
+          }
+        }
+      }
+    },
+    "/get_todo_service": {
+      "get": {
+        "summary": "/get_todo_service",
+        "parameters": [
+          {
+            "name": "db",
+            "in": "query",
+            "description": ""
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "x-trace": {
+              "file": "src/fastapi/app/utils/dependencies.py",
+              "line": 23,
+              "code": "return TodoService(db=db)"
+            }
+          }
+        }
+      }
+    },
+    "/get_all_todos": {
+      "get": {
+        "summary": "/get_all_todos",
+        "parameters": [
+          {
+            "name": "self",
+            "in": "query",
+            "description": ""
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "description": ""
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": ""
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": ""
+          },
+          {
+            "name": "priority",
+            "in": "query",
+            "description": ""
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "description": ""
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "x-trace": {
+              "file": "src/fastapi/app/services/todo_service.py",
+              "line": 65,
+              "code": "return todos, total"
+            }
+          }
+        }
+      }
+    },
+    "/get_todo_by_id": {
+      "get": {
+        "summary": "/get_todo_by_id",
+        "parameters": [
+          {
+            "name": "self",
+            "in": "query",
+            "description": ""
+          },
+          {
+            "name": "todo_id",
+            "in": "query",
+            "description": ""
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "",
+            "x-trace": {
+              "file": "src/fastapi/app/services/todo_service.py",
+              "line": 82,
+              "code": "raise HTTPException(status_code=404, detail=f\"Todo {todo_id} not found\")"
+            }
+          },
+          "200": {
+            "description": "",
+            "x-trace": {
+              "file": "src/fastapi/app/services/todo_service.py",
+              "line": 83,
+              "code": "return todo"
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,450 @@
+
+Parameters:
+[{'name': 'node', 'location': 'query', 'type': 'unknown'}]
+
+Conditions:
+['isinstance(node, cst.Name)', 'isinstance(node, cst.Attribute)']
+
+Return JSON mapping param -> description.
+
+========================================
+
+Parameters:
+[{'name': 'node', 'location': 'query', 'type': 'unknown'}]
+
+Conditions:
+['isinstance(node, cst.Name)', 'isinstance(node, cst.Attribute)']
+
+Return JSON mapping param -> description.
+
+========================================
+
+Responses:
+[{'status': 200, 'conditions': ['isinstance(node, cst.Name)']}, {'status': 200, 'conditions': ['isinstance(node, cst.Name)', 'isinstance(node, cst.Attribute)']}, {'status': 200, 'conditions': ['isinstance(node, cst.Name)', 'isinstance(node, cst.Attribute)']}]
+
+Explain when and why each response occurs.
+Return ONLY valid JSON.
+No explanation.
+No markdown.
+
+========================================
+
+Parameters:
+[]
+
+Conditions:
+[]
+
+Return JSON mapping param -> description.
+
+========================================
+
+Responses:
+[]
+
+Explain when and why each response occurs.
+Return ONLY valid JSON.
+No explanation.
+No markdown.
+
+========================================
+
+Parameters:
+[{'name': 'self', 'location': 'query', 'type': 'unknown'}]
+
+Conditions:
+[]
+
+Return JSON mapping param -> description.
+
+========================================
+
+Responses:
+[{'status': 200, 'conditions': []}]
+
+Explain when and why each response occurs.
+Return ONLY valid JSON.
+No explanation.
+No markdown.
+
+========================================
+
+Parameters:
+[{'name': 'todo_id', 'location': 'query', 'type': 'unknown'}, {'name': 'service', 'location': 'query', 'type': 'unknown'}]
+
+Conditions:
+[]
+
+Return JSON mapping param -> description.
+
+========================================
+
+Responses:
+[{'status': 200, 'conditions': []}, {'status': 404, 'conditions': ['not todo']}, {'status': 200, 'conditions': ['not todo']}, {'status': 200, 'conditions': []}]
+
+Explain when and why each response occurs.
+Return ONLY valid JSON.
+No explanation.
+No markdown.
+
+========================================
+
+Parameters:
+[{'name': 'self', 'location': 'query', 'type': 'unknown'}, {'name': 'todo_data', 'location': 'query', 'type': 'unknown'}]
+
+Conditions:
+[]
+
+Return JSON mapping param -> description.
+
+========================================
+
+Responses:
+[{'status': 200, 'conditions': []}]
+
+Explain when and why each response occurs.
+Return ONLY valid JSON.
+No explanation.
+No markdown.
+
+========================================
+
+Parameters:
+[{'name': 'self', 'location': 'query', 'type': 'unknown'}, {'name': 'todo_id', 'location': 'query', 'type': 'unknown'}, {'name': 'todo_data', 'location': 'query', 'type': 'unknown'}]
+
+Conditions:
+[]
+
+Return JSON mapping param -> description.
+
+========================================
+
+Responses:
+[{'status': 200, 'conditions': ['field == "status" and value', 'value == TodoStatus.COMPLETED', 'todo.status != TodoStatus.COMPLETED.value', 'field == "priority" and value', 'field == "tags" and value is not None', 'value is not None', 'not todo']}, {'status': 404, 'conditions': ['not todo']}, {'status': 200, 'conditions': ['not todo']}]
+
+Explain when and why each response occurs.
+Return ONLY valid JSON.
+No explanation.
+No markdown.
+
+========================================
+
+Parameters:
+[{'name': 'self', 'location': 'query', 'type': 'unknown'}, {'name': 'todo_id', 'location': 'query', 'type': 'unknown'}]
+
+Conditions:
+[]
+
+Return JSON mapping param -> description.
+
+========================================
+
+Responses:
+[{'status': 404, 'conditions': ['not todo']}, {'status': 200, 'conditions': ['not todo']}]
+
+Explain when and why each response occurs.
+Return ONLY valid JSON.
+No explanation.
+No markdown.
+
+========================================
+
+Parameters:
+[{'name': 'self', 'location': 'query', 'type': 'unknown'}]
+
+Conditions:
+[]
+
+Return JSON mapping param -> description.
+
+========================================
+
+Responses:
+[{'status': 200, 'conditions': []}]
+
+Explain when and why each response occurs.
+Return ONLY valid JSON.
+No explanation.
+No markdown.
+
+========================================
+
+Parameters:
+[{'name': 'db', 'location': 'query', 'type': 'unknown'}]
+
+Conditions:
+[]
+
+Return JSON mapping param -> description.
+
+========================================
+
+Responses:
+[{'status': 200, 'conditions': []}]
+
+Explain when and why each response occurs.
+Return ONLY valid JSON.
+No explanation.
+No markdown.
+
+========================================
+
+Parameters:
+[{'name': 'self', 'location': 'query', 'type': 'unknown'}, {'name': 'skip', 'location': 'query', 'type': 'unknown'}, {'name': 'limit', 'location': 'query', 'type': 'unknown'}, {'name': 'status', 'location': 'query', 'type': 'unknown'}, {'name': 'priority', 'location': 'query', 'type': 'unknown'}, {'name': 'search', 'location': 'query', 'type': 'unknown'}]
+
+Conditions:
+['status', 'priority', 'search']
+
+Return JSON mapping param -> description.
+
+========================================
+
+Responses:
+[{'status': 200, 'conditions': ['status', 'priority', 'search']}]
+
+Explain when and why each response occurs.
+Return ONLY valid JSON.
+No explanation.
+No markdown.
+
+========================================
+
+Parameters:
+[{'name': 'self', 'location': 'query', 'type': 'unknown'}, {'name': 'todo_id', 'location': 'query', 'type': 'unknown'}]
+
+Conditions:
+[]
+
+Return JSON mapping param -> description.
+
+========================================
+
+Responses:
+[{'status': 404, 'conditions': ['not todo']}, {'status': 200, 'conditions': ['not todo']}]
+
+Explain when and why each response occurs.
+Return ONLY valid JSON.
+No explanation.
+No markdown.
+
+========================================
+
+Parameters:
+[{'name': 'node', 'location': 'query', 'type': 'unknown'}]
+
+Conditions:
+['isinstance(node, cst.Name)', 'isinstance(node, cst.Attribute)']
+
+Return JSON mapping param -> description.
+
+========================================
+
+Responses:
+[{'status': 200, 'conditions': ['isinstance(node, cst.Name)']}, {'status': 200, 'conditions': ['isinstance(node, cst.Name)', 'isinstance(node, cst.Attribute)']}, {'status': 200, 'conditions': ['isinstance(node, cst.Name)', 'isinstance(node, cst.Attribute)']}]
+
+Explain when and why each response occurs.
+Return ONLY valid JSON.
+No explanation.
+No markdown.
+
+========================================
+
+Parameters:
+[]
+
+Conditions:
+[]
+
+Return JSON mapping param -> description.
+
+========================================
+
+Responses:
+[]
+
+Explain when and why each response occurs.
+Return ONLY valid JSON.
+No explanation.
+No markdown.
+
+========================================
+
+Parameters:
+[{'name': 'self', 'location': 'query', 'type': 'unknown'}]
+
+Conditions:
+[]
+
+Return JSON mapping param -> description.
+
+========================================
+
+Responses:
+[{'status': 200, 'conditions': []}]
+
+Explain when and why each response occurs.
+Return ONLY valid JSON.
+No explanation.
+No markdown.
+
+========================================
+
+Parameters:
+[{'name': 'todo_id', 'location': 'query', 'type': 'unknown'}, {'name': 'service', 'location': 'query', 'type': 'unknown'}]
+
+Conditions:
+[]
+
+Return JSON mapping param -> description.
+
+========================================
+
+Responses:
+[{'status': 200, 'conditions': []}, {'status': 404, 'conditions': ['not todo']}, {'status': 200, 'conditions': ['not todo']}, {'status': 200, 'conditions': []}]
+
+Explain when and why each response occurs.
+Return ONLY valid JSON.
+No explanation.
+No markdown.
+
+========================================
+
+Parameters:
+[{'name': 'self', 'location': 'query', 'type': 'unknown'}, {'name': 'todo_data', 'location': 'query', 'type': 'unknown'}]
+
+Conditions:
+[]
+
+Return JSON mapping param -> description.
+
+========================================
+
+Responses:
+[{'status': 200, 'conditions': []}]
+
+Explain when and why each response occurs.
+Return ONLY valid JSON.
+No explanation.
+No markdown.
+
+========================================
+
+Parameters:
+[{'name': 'self', 'location': 'query', 'type': 'unknown'}, {'name': 'todo_id', 'location': 'query', 'type': 'unknown'}, {'name': 'todo_data', 'location': 'query', 'type': 'unknown'}]
+
+Conditions:
+[]
+
+Return JSON mapping param -> description.
+
+========================================
+
+Responses:
+[{'status': 200, 'conditions': ['field == "status" and value', 'value == TodoStatus.COMPLETED', 'todo.status != TodoStatus.COMPLETED.value', 'field == "priority" and value', 'field == "tags" and value is not None', 'value is not None', 'not todo']}, {'status': 404, 'conditions': ['not todo']}, {'status': 200, 'conditions': ['not todo']}]
+
+Explain when and why each response occurs.
+Return ONLY valid JSON.
+No explanation.
+No markdown.
+
+========================================
+
+Parameters:
+[{'name': 'self', 'location': 'query', 'type': 'unknown'}, {'name': 'todo_id', 'location': 'query', 'type': 'unknown'}]
+
+Conditions:
+[]
+
+Return JSON mapping param -> description.
+
+========================================
+
+Responses:
+[{'status': 404, 'conditions': ['not todo']}, {'status': 200, 'conditions': ['not todo']}]
+
+Explain when and why each response occurs.
+Return ONLY valid JSON.
+No explanation.
+No markdown.
+
+========================================
+
+Parameters:
+[{'name': 'self', 'location': 'query', 'type': 'unknown'}]
+
+Conditions:
+[]
+
+Return JSON mapping param -> description.
+
+========================================
+
+Responses:
+[{'status': 200, 'conditions': []}]
+
+Explain when and why each response occurs.
+Return ONLY valid JSON.
+No explanation.
+No markdown.
+
+========================================
+
+Parameters:
+[{'name': 'db', 'location': 'query', 'type': 'unknown'}]
+
+Conditions:
+[]
+
+Return JSON mapping param -> description.
+
+========================================
+
+Responses:
+[{'status': 200, 'conditions': []}]
+
+Explain when and why each response occurs.
+Return ONLY valid JSON.
+No explanation.
+No markdown.
+
+========================================
+
+Parameters:
+[{'name': 'self', 'location': 'query', 'type': 'unknown'}, {'name': 'skip', 'location': 'query', 'type': 'unknown'}, {'name': 'limit', 'location': 'query', 'type': 'unknown'}, {'name': 'status', 'location': 'query', 'type': 'unknown'}, {'name': 'priority', 'location': 'query', 'type': 'unknown'}, {'name': 'search', 'location': 'query', 'type': 'unknown'}]
+
+Conditions:
+['status', 'priority', 'search']
+
+Return JSON mapping param -> description.
+
+========================================
+
+Responses:
+[{'status': 200, 'conditions': ['status', 'priority', 'search']}]
+
+Explain when and why each response occurs.
+Return ONLY valid JSON.
+No explanation.
+No markdown.
+
+========================================
+
+Parameters:
+[{'name': 'self', 'location': 'query', 'type': 'unknown'}, {'name': 'todo_id', 'location': 'query', 'type': 'unknown'}]
+
+Conditions:
+[]
+
+Return JSON mapping param -> description.
+
+========================================
+
+Responses:
+[{'status': 404, 'conditions': ['not todo']}, {'status': 200, 'conditions': ['not todo']}]
+
+Explain when and why each response occurs.
+Return ONLY valid JSON.
+No explanation.
+No markdown.
+
+========================================
