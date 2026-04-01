@@ -11,7 +11,7 @@ from langchain.messages import AnyMessage
 # Ensure the log directory exists 
 LOG_DIR = Path("output/log")
 
-os.makedirs(LOG_DIR, exist_ok=True)
+
 
 # Define the formatter
 formatter = logging.Formatter(
@@ -22,6 +22,8 @@ formatter = logging.Formatter(
 # Helper function to create dedicated loggers
 def setup_file_logger(name: str, log_file: str, level=logging.INFO) -> logging.Logger:
     """Creates a dedicated logger that writes exclusively to a specific file."""
+    os.makedirs(LOG_DIR, exist_ok=True)
+
     # Create the logger
     logger = logging.getLogger(name)
     logger.setLevel(level)

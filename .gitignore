@@ -1,8 +1,11 @@
 venv/
 .env
 __pycache__/
+output/
 *.pyc
 
 .claude
 
 *.json
+
+*.log

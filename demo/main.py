@@ -3,7 +3,6 @@ import os
 from typing import List, Literal
 from tqdm.auto import tqdm
 from pathlib import Path
-import psutil
 import shutil
 from src.dependency_analyzer.ast_parser import DependencyParser
 from src.dependency_analyzer.topo_sort import topo_sort, graph_from_components
@@ -113,6 +112,11 @@ def generate_docs(components: List[CodeComponent], reader: Reader, searcher: Sea
 
 
 
+
+
+if OUTPUT_DIR.exists():
+    shutil.rmtree(OUTPUT_DIR)
+
 reader_model = "llama3.2:3b"
 reader_model_provider = "ollama"
 writer_model = "llama3.2:3b"
@@ -156,8 +160,7 @@ writer = Writer(model= writer_model,
 
 # Traverse according to the order and generate the docs
 total_files = sum(len(group) for group in topo_order)
-if OUTPUT_DIR.exists():
-    shutil.rmtree(OUTPUT_DIR)
+
 with tqdm(total=total_files, desc="Generating document") as pbar:
     for group in topo_order:
         components = [dependencyParser.components[component] for component in group]
