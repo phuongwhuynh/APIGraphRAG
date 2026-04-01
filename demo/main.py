@@ -5,7 +5,7 @@ from extractor import extract
 from generator import generate
 from assembler import assemble_openapi
 
-INPUT_DIR = "/Users/phuocpham/Desktop/BachPhuoc/Year4/DoAn/DoAn/src/fastapi"
+INPUT_DIR = "/project_dir/"
 OUTPUT_DIR = "generated"
 MODEL = "llama3"
 

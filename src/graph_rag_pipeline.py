@@ -364,3 +364,11 @@ if __name__ == "__main__":
     print("\n=== Generating OpenAPI Document ===")
     oas = builder.build_oas()
     print(json.dumps(oas, indent=2))
+
+
+
+
+# ko thực sự là graph
+# chưa có move theo input degree
+# còn chưa tối ưu chỗ import
+# multithread
