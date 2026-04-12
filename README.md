@@ -60,6 +60,7 @@ demo/
 
 ## Prerequisites
 
+- You must have docker running on your machine in advance
 - Python environment with dependencies installed from `requirements.txt`.
 - A running LLM provider matching the config in `demo/main.py`.
   - Current defaults: model `llama3.2:3b`, provider `ollama`.
