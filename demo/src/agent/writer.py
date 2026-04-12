@@ -11,8 +11,8 @@ from langchain.chat_models import init_chat_model
 from langgraph.graph import StateGraph, START, END
 from langgraph.types import Send
 from langchain.messages import HumanMessage, SystemMessage, AnyMessage
-# from openapi_spec_validator import validate
-# from openapi_spec_validator.readers import read_from_filename
+from openapi_spec_validator import validate
+from openapi_spec_validator.readers import read_from_filename
 
 
 
@@ -303,7 +303,7 @@ class Writer(BasicModel):
             Returns:
                 a writer object"""
         
-        super().__init__(agent_name="writer",
+        super().__init__(agent_name="Writer",
                          model=model,
                          model_provider=model_provider,
                          input_context_window=input_context_window,

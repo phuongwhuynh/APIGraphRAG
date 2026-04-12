@@ -1,7 +1,9 @@
 venv/
 .env
+.DS_Store
 __pycache__/
 output/
+
 *.pyc
 
 .claude
@@ -9,3 +11,5 @@ output/
 *.json
 
 *.log
+
+demo/src/tools/evaluate/BARTScore/

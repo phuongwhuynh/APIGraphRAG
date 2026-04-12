@@ -3,6 +3,7 @@ import os
 from typing import List, Literal
 from tqdm.auto import tqdm
 from pathlib import Path
+# import psutil
 import shutil
 from src.dependency_analyzer.ast_parser import DependencyParser
 from src.dependency_analyzer.topo_sort import topo_sort, graph_from_components
@@ -12,9 +13,9 @@ from src.agent.writer import Writer
 from langchain_core.runnables import RunnableConfig
 
 
-
-REPO_PATH = "/Users/phuocpham/Desktop/BachPhuoc/Year4/DoAn/DoAn/src/fastapi"
-OUTPUT_DIR = Path("output")
+CURRENT_PATH = Path(__file__)
+REPO_DIR = CURRENT_PATH.parent.parent / "data" / "dispatch"
+OUTPUT_DIR = CURRENT_PATH.parent / "output"
 READER_OUTPUT_FILEPATH = OUTPUT_DIR / "reader_output.json"
 SEARCHER_OUTPUT_FILEPATH = OUTPUT_DIR / "searcher_output.json"
 WRITER_OUTPUT_FILEPATH = OUTPUT_DIR / "writer_output.json"
@@ -43,8 +44,6 @@ WRITER_OUTPUT_FILEPATH = OUTPUT_DIR / "writer_output.json"
 # config: RunnableConfig = {
 #     "max_concurrency": calculate_dynamic_concurrency(2.0)
 # }
-
-
 
 def print_dict(d):
     """A function to print nested dictionary"""
@@ -110,10 +109,6 @@ def generate_docs(components: List[CodeComponent], reader: Reader, searcher: Sea
 
     return
 
-
-
-
-
 if OUTPUT_DIR.exists():
     shutil.rmtree(OUTPUT_DIR)
 
@@ -127,18 +122,26 @@ config: RunnableConfig = {
 
 
 # Build dependency graph
-dependencyParser = DependencyParser(REPO_PATH, framework="fastapi")
+dependencyParser = DependencyParser(framework="fastapi",
+                                    project_dir=REPO_DIR,
+                                    output_dir=OUTPUT_DIR,
+                                    app_instance_path="src.dispatch.main:api",
+                                    python_exec="/Users/phuocpham/Desktop/BachPhuoc/Year4/DoAn/SelfDocAgent/data/dispatch/venv/bin/python",
+                                    compose_file= REPO_DIR / ".devcontainer" / "docker-compose.yml",
+                                    service_name="app",
+                                    excluded_dirs=["tests", "src/dispatch/database/revisions"]
+                                    )
 dependencyParser.parse_repository()
 
-print(f"\n\nAPI endpoints: {len(dependencyParser.endpoints.endpoints)}",dependencyParser.endpoints.endpoints)
-print(f"\n\nAPI schemas: {len(dependencyParser.endpoints.schemas)}",dependencyParser.endpoints.schemas)
+print(f"\n\nAPI endpoints: {len(dependencyParser.endpoints.endpoints)}")#,dependencyParser.endpoints.endpoints)
+print(f"\n\nAPI schemas: {len(dependencyParser.endpoints.schemas)}")#,dependencyParser.endpoints.schemas)
 
 dependencyParser.save_dependency_graph("output/dependency_graph.json")
 
 # Determine the traversal order on the graph
 repo_graph = graph_from_components(dependencyParser.components)
 topo_order = topo_sort(repo_graph)
-print("Topological order of components:" , topo_order)
+#print("Topological order of components:" , topo_order)
 
 
 # Initialize specialized models
@@ -164,12 +167,17 @@ total_files = sum(len(group) for group in topo_order)
 with tqdm(total=total_files, desc="Generating document") as pbar:
     for group in topo_order:
         components = [dependencyParser.components[component] for component in group]
-
-        generate_docs(components=components,
-                      reader=reader,
-                      searcher=searcher,
-                      writer=writer)
         
-        pbar.update(len(group))
+        # Process components in batches of max 5
+        for i in range(0, len(components), 5):
+            batch = components[i:i + 5]
+            print("The components number in batch: ", len(batch))
+
+            generate_docs(components=batch,
+                          reader=reader,
+                          searcher=searcher,
+                          writer=writer)
+            
+            pbar.update(len(batch))
 
 
