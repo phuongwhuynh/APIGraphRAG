@@ -1,5 +1,6 @@
 import json
 import os
+import gc
 from typing import List, Literal
 from tqdm.auto import tqdm
 from pathlib import Path
@@ -7,52 +8,24 @@ from pathlib import Path
 import shutil
 from src.dependency_analyzer.ast_parser import DependencyParser
 from src.dependency_analyzer.topo_sort import topo_sort, graph_from_components
-from src.agent.reader import Reader, CodeComponent
-from src.agent.searcher import Searcher
-from src.agent.writer import Writer
+from src.llm.rank import Ranker, CodeComponent
+from src.llm.cot import CoT 
+# from src.llm.searcher import Searcher
+from src.llm.generate import Generator
+from src.database.storage import Storage
 from langchain_core.runnables import RunnableConfig
+from src.tools.get_spec.merge_spec import merge_docs_into_openapi
 
 
 CURRENT_PATH = Path(__file__)
 REPO_DIR = CURRENT_PATH.parent.parent / "data" / "dispatch"
 OUTPUT_DIR = CURRENT_PATH.parent / "output"
-READER_OUTPUT_FILEPATH = OUTPUT_DIR / "reader_output.json"
-SEARCHER_OUTPUT_FILEPATH = OUTPUT_DIR / "searcher_output.json"
-WRITER_OUTPUT_FILEPATH = OUTPUT_DIR / "writer_output.json"
+OPENAPI_SPEC_PATH = OUTPUT_DIR / REPO_DIR.name 
+RESULTED_OPENAPI_SPEC_PATH = OUTPUT_DIR / ("resulted_" + REPO_DIR.name)
+RANK_OUTPUT_FILEPATH = OUTPUT_DIR / "rank_output.json"
+COT_OUTPUT_FILEPATH = OUTPUT_DIR / "cot_output.json"
+GENERATE_OUTPUT_FILEPATH = OUTPUT_DIR / "generate_output.json"
 
-# def calculate_dynamic_concurrency(ram_per_worker: float) -> int:
-#     """Calculates safe parallel workers based on system hardware."""
-    
-#     # Check available CPU Cores
-#     total_cores = os.cpu_count() or 1
-    
-#     # Check available RAM (in Gigabytes)
-#     free_ram_gb = psutil.virtual_memory().available / (1024 ** 3)
-    
-#     # to handle the context window during parallel generation.
-#     ram_based_workers = int(free_ram_gb // ram_per_worker)
-    
-#     # 4. Pick the safest number: At least 1, but don't exceed your CPU cores or RAM limits.
-#     safe_concurrency = max(1, min(ram_based_workers, total_cores - 1))
-    
-#     print(f"Hardware Check: {free_ram_gb:.1f}GB free RAM, {total_cores} cores.")
-#     print(f"Dynamically setting max_concurrency to: {safe_concurrency}")
-    
-#     return safe_concurrency
-
-# # Apply it to your LangGraph config dynamically
-# config: RunnableConfig = {
-#     "max_concurrency": calculate_dynamic_concurrency(2.0)
-# }
-
-def print_dict(d):
-    """A function to print nested dictionary"""
-    if isinstance(d, dict):
-        for key, value in d.items():
-            print(key)
-            print_dict(value)
-    else:
-        print(d)
 
 def save_as_json(file_path: str, data: dict) -> None:
     """Save or merge dictionary data to a json file"""
@@ -87,97 +60,116 @@ def load_json(file_path: str) -> dict:
         print(f"Error reading {file_path}: {e}")
         return {}
 
-def generate_docs(components: List[CodeComponent], reader: Reader, searcher: Searcher, writer: Writer):
-    """ Simutaneously generate docs for components through simple straight pipeline: Context Analysis (Reader) -> Context Retrieval (Searcher) -> Document Generation (Writer)
+def generate_docs(components: List[CodeComponent], cot: CoT, rank: Ranker, generate: Generator):
+    """ Simutaneously generate docs for components through simple straight pipeline: Context Analysis (rank) -> Context Retrieval (Searcher) -> Document Generation (generate)
         Args:
             components: target components to be documneted"""
 
     # Return the dictionary context analysis, the analysis is returned as dict with hierarchy: component.id -> "docstring"/"endpoint"/"schema" -> ComponentContext(reasoning, context, suggested_misisng_info)
-    context_analysis = reader.invoke(components)
+    chain_of_thoughts = cot.invoke(components)
+    save_as_json(file_path= COT_OUTPUT_FILEPATH, data = chain_of_thoughts)
+    ranks = rank.invoke(components, chain_of_thoughts)
+    save_as_json(file_path= RANK_OUTPUT_FILEPATH, data = ranks)
 
-    save_as_json(file_path= READER_OUTPUT_FILEPATH, data = context_analysis)
-    # context_analysis = load_json(file_path=READER_OUTPUT_FILEPATH)
+    # chain_of_thoughts = load_json(COT_OUTPUT_FILEPATH)
+    # ranks = load_json(RANK_OUTPUT_FILEPATH)
 
-    # Retrieve the context data as a dict with hierarchy: component.id -> "docstring"/"openapi" -> "high_importance"/ "medium_importance"/ "low_importance"/ "suggested_missing_info" -> List[str]
-    context_retrieval = searcher.invoke(context_analysis)
-    save_as_json(file_path= SEARCHER_OUTPUT_FILEPATH, data = context_retrieval)
-
-
-    # generated_docs, schemas = writer.invoke(components, context_retrieval, type_doc)
-    docs = writer.invoke(components=components, contexts= context_retrieval)
-    save_as_json(file_path= WRITER_OUTPUT_FILEPATH, data= docs)
+    docs = generate.invoke(components=components, cots= chain_of_thoughts, ranks=ranks)
+    save_as_json(file_path= GENERATE_OUTPUT_FILEPATH, data= docs)
 
     return
 
-if OUTPUT_DIR.exists():
-    shutil.rmtree(OUTPUT_DIR)
 
-reader_model = "llama3.2:3b"
-reader_model_provider = "ollama"
-writer_model = "llama3.2:3b"
-writer_model_provider = "ollama"
-config: RunnableConfig = {
-    "max_concurrency": 1
-}
+if __name__ == "__main__":
+    # if OUTPUT_DIR.exists():
+    #     shutil.rmtree(OUTPUT_DIR)
 
+    db_storage = Storage("dependency_graph.db")
+    db_storage._init_db()
 
-# Build dependency graph
-dependencyParser = DependencyParser(framework="fastapi",
-                                    project_dir=REPO_DIR,
-                                    output_dir=OUTPUT_DIR,
-                                    app_instance_path="src.dispatch.main:api",
-                                    python_exec="/Users/phuocpham/Desktop/BachPhuoc/Year4/DoAn/SelfDocAgent/data/dispatch/venv/bin/python",
-                                    compose_file= REPO_DIR / ".devcontainer" / "docker-compose.yml",
-                                    service_name="app",
-                                    excluded_dirs=["tests", "src/dispatch/database/revisions"]
-                                    )
-dependencyParser.parse_repository()
-
-print(f"\n\nAPI endpoints: {len(dependencyParser.endpoints.endpoints)}")#,dependencyParser.endpoints.endpoints)
-print(f"\n\nAPI schemas: {len(dependencyParser.endpoints.schemas)}")#,dependencyParser.endpoints.schemas)
-
-dependencyParser.save_dependency_graph("output/dependency_graph.json")
-
-# Determine the traversal order on the graph
-repo_graph = graph_from_components(dependencyParser.components)
-topo_order = topo_sort(repo_graph)
-#print("Topological order of components:" , topo_order)
-
-
-# Initialize specialized models
-reader = Reader(model= reader_model, 
-                model_provider= reader_model_provider, 
-                input_context_window= 4096,
-                output_context_window= 1024,
-                config= config)
-
-searcher = Searcher(dependencyParser.components)
-
-writer = Writer(model= writer_model, 
-                model_provider= writer_model_provider, 
-                input_context_window= 4096,
-                output_context_window= 1024,
-                config= config)
+    rank_model = "llama3.2:3b"
+    rank_model_provider = "openai"
+    cot_model = "llama3.2:3b"
+    cot_model_provider = "ollama"
+    generate_model = "llama3.2:3b"
+    generate_model_provider = "ollama"
 
 
 
-# Traverse according to the order and generate the docs
-total_files = sum(len(group) for group in topo_order)
+    # Build dependency graph
+    dependencyParser = DependencyParser(framework="fastapi",
+                                        project_dir=REPO_DIR,
+                                        output_dir=OUTPUT_DIR,
+                                        app_instance_path="src.dispatch.main:api",
+                                        python_exec="/Users/phuocpham/Desktop/BachPhuoc/Year4/DoAn/SelfDocAgent/data/dispatch/venv/bin/python",
+                                        compose_file= REPO_DIR / ".devcontainer" / "docker-compose.yml",
+                                        service_name="app",
+                                        excluded_dirs=["tests", "src/dispatch/database/revisions"]
+                                        )
+    dependencyParser.parse_repository()
 
-with tqdm(total=total_files, desc="Generating document") as pbar:
-    for group in topo_order:
-        components = [dependencyParser.components[component] for component in group]
-        
-        # Process components in batches of max 5
-        for i in range(0, len(components), 5):
-            batch = components[i:i + 5]
-            print("The components number in batch: ", len(batch))
+    dependencyParser.save_dependency_graph(db_storage)
+    del dependencyParser
+    gc.collect()
 
-            generate_docs(components=batch,
-                          reader=reader,
-                          searcher=searcher,
-                          writer=writer)
-            
-            pbar.update(len(batch))
+    # Determine the traversal order on the graph
+    repo_graph = graph_from_components(db_storage.get_all_topologies())
+    topo_order = topo_sort(repo_graph)
+
+    del repo_graph
+    gc.collect()
+    
+
+    # Initialize specialized models
+    cot = CoT(model= cot_model, 
+                    model_provider= cot_model_provider, 
+                    input_context_window= 4096,
+                    output_context_window= 1024,
+                    output_dir= OUTPUT_DIR)
 
 
+    rank = Ranker(model= rank_model, 
+                    model_provider= rank_model_provider, 
+                    api_key="ollama",
+                    base_url="http://localhost:11434/v1",
+                    max_tokens= 1,
+                    logprobs=True, 
+                    top_logprobs=10,
+                    input_context_window= 4096,
+                    output_context_window= 1024,
+                    output_dir= OUTPUT_DIR,
+                    window_size= 10,
+                    step= 5,
+                    top_k= 10)
+
+    # searcher = Searcher(db_storage)
+
+    generate = Generator(model= generate_model, 
+                    model_provider= generate_model_provider, 
+                    input_context_window= 4096,
+                    output_context_window= 1024,
+                    db_conn = db_storage,
+                    output_dir= OUTPUT_DIR)
+
+
+
+    # Traverse according to the order and generate the docs
+    total_files = sum(len(group) for group in topo_order)
+
+    with tqdm(total=total_files, desc="Generating document") as pbar:
+        for group in topo_order:
+
+            # Process components in batches of max 5
+            for i in range(0, len(group), 5):
+                batch = group[i:i + 5]
+                batch = db_storage.get_batch(batch)
+                # print("The components number in batch: ", len(batch), type(batch[0]))
+
+                generate_docs(components=batch,
+                              cot=cot,
+                              rank=rank,
+                              generate=generate)
+
+                pbar.update(len(batch))
+
+    merge_docs_into_openapi(GENERATE_OUTPUT_FILEPATH, OPENAPI_SPEC_PATH, RESULTED_OPENAPI_SPEC_PATH)
