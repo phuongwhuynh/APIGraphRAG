@@ -105,7 +105,7 @@ def topo_sort(graph: Dict[str, List[str]]) -> List[str]:
 def graph_from_components(components: List[CodeComponent]) -> Dict[str, List[str]]:
     graph = {}
     for id, component in components.items():
-        graph[id] = component.depends_on
+        graph[id] = component
     return graph
 
 

@@ -1,11 +1,11 @@
 from src.dependency_analyzer.ast_parser import DependencyParser
-from src.agent.reader import ComponentContext, CodeComponent
+from src.llm.rank import ComponentContext, CodeComponent
 from typing import Any, Dict, List
 
 
 class Searcher():
-    def __init__(self, repo_components: Dict[str, CodeComponent], none_local_search: bool = False):
-        self.repo_components = repo_components
+    def __init__(self, storage_conn: Any, none_local_search: bool = False):
+        self.storage_conn = storage_conn
         self.none_local_search = none_local_search
 
 
