@@ -7,11 +7,13 @@ import os
 import ast
 import builtins
 import logging
+import gc
 from tqdm.auto import tqdm
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Set, Optional, Literal, Dict, Any, Tuple
 from src.tools.get_spec.get_spec import SpecGetterFactory
+
 
 
 logger = logging.getLogger(__name__)
@@ -59,6 +61,7 @@ class CodeComponent:
 
     # Is this an endpoint
     doc_type: List[str] = field(default_factory=lambda: ["docstring"])
+    api_methods: List[str] = field(default_factory=lambda: [])
     
 
 
@@ -77,7 +80,8 @@ class CodeComponent:
             "end_line": self.end_line,
             "has_docstring": self.has_docstring,
             "docstring": self.docstring,
-            "doc_type": self.doc_type
+            "doc_type": self.doc_type,
+            "api_methods": self.api_methods,
         }
     
     @staticmethod    
@@ -96,7 +100,8 @@ class CodeComponent:
             end_line = data.get("end_line", 0),
             has_docstring = data.get("has_docstring", False),
             docstring = data.get("docstring", ""),
-            doc_type = data.get("doc_type", ["docstring"])
+            doc_type = data.get("doc_type", ["docstring"]),
+            api_methods = data.get("api_methods", [])
         )
 
 import ast
@@ -627,6 +632,10 @@ class DependencyParser:
         logger.info("Adding class and method dependencies...")
         self._add_class_method_dependencies()
 
+        for component in self.components.values():
+            component.node = None
+        gc.collect()
+
         logger.info(f"Found {len(self.components)} code components")
         return self.components
     
@@ -690,6 +699,7 @@ class DependencyParser:
                 )
                 if self.endpoints.is_endpoint(component):
                     component.doc_type.append("endpoint")
+                    component.api_methods = self.endpoints.endpoints[component.id]
                 if self.endpoints.is_schema(component):
                     component.doc_type.append("schema")
 
@@ -720,8 +730,10 @@ class DependencyParser:
                             )
                         if self.endpoints.is_endpoint(method_component):
                             method_component.doc_type.append("endpoint")
+                            method_component.api_methods = self.endpoints.endpoints[method_id]
 
                         self.components[method_id] = method_component
+                        
 
             elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and not isinstance(node.parent, ast.ClassDef):
                 # Collect top-level functions only
@@ -748,9 +760,11 @@ class DependencyParser:
                     )
                     if self.endpoints.is_endpoint(func_component):
                         func_component.doc_type.append("endpoint")
+                        func_component.api_methods = self.endpoints.endpoints[func_id]
 
 
                     self.components[func_id] = func_component
+
 
     def _get_docstring(self, source: str, node: ast.AST) -> Tuple[bool, str]:
         """Get docstring of a class, function or method"""
@@ -851,19 +865,16 @@ class DependencyParser:
                 if class_id in self.components and self.components[class_id].component_type == 'class':
                     component.depends_on.add(class_id)
 
-    def save_dependency_graph(self, output_path: str) -> None:
+    def save_dependency_graph(self, storage_conn: Any) -> None:
         """Save the dependency graph to a JSON file"""
         # Convert to serializable format
         serializable_components = {
             comp_id: component.to_dict() for comp_id, component in self.components.items()
         }
         
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(serializable_components, f, indent=2)
+        storage_conn.save(serializable_components)
         
-        logger.info(f"Save dependency graph to {output_path}")
+        logger.info(f"Save dependency graph to {storage_conn.db_path}")
 
     def load_dependency_graph(self, input_path: str) -> None:
         """Load the dependency graph from a JSON file"""
