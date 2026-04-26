@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Set, Optional, Literal, Dict, Any, Tuple
 from src.tools.get_spec.get_spec import SpecGetterFactory
+from enum import Enum 
+
 
 
 
@@ -21,6 +23,12 @@ logger = logging.getLogger(__name__)
 BUILTIN_TYPES = {name for name in dir(builtins)}
 EXCLUDED_NAMES = {'self', 'cls'}
 EXCLUDE_DIRS = {'.git', '__pycache__', 'venv', '.venv', 'env', '.env', 'node_modules', 'build', 'dist'}
+
+class DocType(Enum):
+    DOCSTRING = "docstring"
+    ENDPOINT = "endpoint"
+    SCHEMA = "schema"
+
 
 @dataclass
 class CodeComponent:
@@ -58,9 +66,11 @@ class CodeComponent:
     has_docstring: bool = False
     # Content of the docstring if it exists
     docstring: str = ""
+    endpoint: Dict[str, str] = field(default_factory=lambda: {})
+    schema: str = ""
 
     # Is this an endpoint
-    doc_type: List[str] = field(default_factory=lambda: ["docstring"])
+    doc_type: List[str] = field(default_factory=lambda: [DocType.DOCSTRING.value])
     api_methods: List[str] = field(default_factory=lambda: [])
     
 
@@ -80,6 +90,8 @@ class CodeComponent:
             "end_line": self.end_line,
             "has_docstring": self.has_docstring,
             "docstring": self.docstring,
+            "endpoint": self.endpoint,
+            "schema": self.schema,
             "doc_type": self.doc_type,
             "api_methods": self.api_methods,
         }
@@ -100,7 +112,9 @@ class CodeComponent:
             end_line = data.get("end_line", 0),
             has_docstring = data.get("has_docstring", False),
             docstring = data.get("docstring", ""),
-            doc_type = data.get("doc_type", ["docstring"]),
+            endpoint = data.get("endpoint", {}),
+            schema = data.get("schema", ""),
+            doc_type = data.get("doc_type", [DocType.DOCSTRING.value]),
             api_methods = data.get("api_methods", [])
         )
 
@@ -319,6 +333,7 @@ class OpenAPICollector():
                 python_exec: the path to the Python environment to use for running the project (if needed for endpoint extraction)
                 compose_file: the path to the docker-compose file to use for running the project (if needed for endpoint extraction)
                 service_name: the name of the service running in docker"""
+        self.endpoints = {}
         try:
             spec_getter = SpecGetterFactory.create(
                 framework= framework,
@@ -332,8 +347,11 @@ class OpenAPICollector():
             )
             if not Path(spec_getter.output_file).exists():
                 spec_getter.get_spec()
+
+            self.endpoints = spec_getter.endpoint_func_map()
         except Exception as e:
             logger.error(f"Cannot get specification skeleton by running on docker: {e}")
+            logger.info(f"Try to get specification skeleton by running on local environment")
             try:
                 spec_getter = SpecGetterFactory.create(
                     framework= framework,
@@ -346,10 +364,11 @@ class OpenAPICollector():
                     service_name= service_name,)
                 if not Path(spec_getter.output_file).exists():
                     spec_getter.get_spec()
+                self.endpoints = spec_getter.endpoint_func_map()
             except Exception as e:
                 logger.error(f"Cannot get specification skeleton by running on local env: {e}")
 
-        self.endpoints = spec_getter.endpoint_func_map()
+        # self.endpoints = spec_getter.endpoint_func_map()
         self.schemas = set()
 
     # deprecated
@@ -465,6 +484,7 @@ class OpenAPICollector():
             return False
         
         if component.id in self.schemas:
+            print("schemaschema")
             return True
 
         # The known base classes that indicate a schema
@@ -482,22 +502,27 @@ class OpenAPICollector():
             if isinstance(base, ast.Name):
                 if base.id in schema_identifiers:
                     self.schemas.add(component.id)
+                    print("schemaschema")
                     return True
 
             # 2. Catch attributed inheritance: class User(pydantic.BaseModel):
             elif isinstance(base, ast.Attribute):
                 if base.attr in schema_identifiers:
                     self.schemas.add(component.id)
+                    print("schemaschema")
                     return True
 
         return False
 
     def is_endpoint(self, component: CodeComponent) -> bool:
         """Decide if a code component is a openAPI endpoint"""
+        # for endpoint in self.endpoints:
+        #     if endpoint in component.id:
+        #         return self.endpoints[endpoint]
         if component.id in self.endpoints:
-            return True
+            return self.endpoints[component.id]
 
-        return False   
+        return None
         # if framework == "django":
         #     # Assumes urls.py was parsed perfectly elsewhere
         #     return component.id in self.endpoints
@@ -591,6 +616,7 @@ class DependencyParser:
                                                             python_exec=python_exec,
                                                             compose_file=compose_file,
                                                             service_name=service_name)
+
         self.framework: Literal["django", "fastapi", "flask"] = framework
 
     def parse_repository(self) -> Dict[str, CodeComponent]:
@@ -600,8 +626,13 @@ class DependencyParser:
         # First pass: collect all modules and code components
         python_files = []
         
+        instance_file = (self.app_instance_path.split(":"))[0]
+        instance_file = (instance_file.split("."))[:-2]
+        main_dir = self.project_dir
+        for part in instance_file:
+            main_dir = main_dir / part
         
-        for root, dirs, files in os.walk(self.project_dir):
+        for root, dirs, files in os.walk(main_dir):
             root_path = Path(root)
             
             # Prune traversal tree in-place using OS-agnostic Path comparison
@@ -619,7 +650,7 @@ class DependencyParser:
                 python_files.append(str(file_path))
 
         for file_path in tqdm(python_files, desc= "Parsing Python files", unit="file"):
-            relative_path = os.path.relpath(file_path, self.project_dir)
+            relative_path = os.path.relpath(file_path, main_dir)
             # COnvert file path to module path
             module_path = self._file_to_module_path(relative_path)
             self.modules.add(module_path)
@@ -638,13 +669,15 @@ class DependencyParser:
 
         logger.info(f"Found {len(self.components)} code components")
         return self.components
-    
+
+
     def _file_to_module_path(self, file_path: str) -> str:
         """Convert a file path to a Python module path"""
 
         path = file_path[:-3] if file_path.endswith(".py") else file_path
         return path.replace(os.path.sep, ".")
     
+
     def _parse_file(self, file_path: str, relative_path: str, module_path: str):
         """Parse a single Python file to collect code components."""
         try:
@@ -665,6 +698,7 @@ class DependencyParser:
 
         except (SyntaxError, UnicodeDecodeError) as e:
             logger.warning(f"Error parsing {file_path}: {e}")  
+
 
     def _collect_components(self, tree: ast.AST, file_path: str, relative_path: str, module_path: str, source: str):
         """Collect all node components (functions, classes, methods) from an AST"""
@@ -695,13 +729,19 @@ class DependencyParser:
                     end_line=getattr(node, "end_lineno", node.lineno),
                     has_docstring=has_docstring,
                     docstring=docstring,
-                    doc_type=["docstring"]
+                    endpoint={},
+                    schema="",
+                    doc_type=[DocType.DOCSTRING.value]
                 )
-                if self.endpoints.is_endpoint(component):
-                    component.doc_type.append("endpoint")
-                    component.api_methods = self.endpoints.endpoints[component.id]
-                if self.endpoints.is_schema(component):
-                    component.doc_type.append("schema")
+                
+                endpoint = self.endpoints.is_endpoint(component)
+                if endpoint:
+                    component.doc_type.append(DocType.ENDPOINT.value)
+                    component.api_methods = endpoint
+
+                schema = self.endpoints.is_schema(component)
+                if schema:
+                    component.doc_type.append(DocType.SCHEMA.value)
 
                 self.components[class_id] = component
 
@@ -726,11 +766,14 @@ class DependencyParser:
                             end_line=getattr(item, "end_lineno", item.lineno),
                             has_docstring=has_docstring,
                             docstring=docstring,
-                            doc_type=["docstring"]
+                            endpoint={},
+                            schema="",
+                            doc_type=[DocType.DOCSTRING.value]
                             )
-                        if self.endpoints.is_endpoint(method_component):
-                            method_component.doc_type.append("endpoint")
-                            method_component.api_methods = self.endpoints.endpoints[method_id]
+                        endpoint = self.endpoints.is_endpoint(method_component)
+                        if endpoint:
+                            method_component.doc_type.append(DocType.ENDPOINT.value)
+                            method_component.api_methods = endpoint
 
                         self.components[method_id] = method_component
                         
@@ -756,11 +799,14 @@ class DependencyParser:
                         end_line=getattr(node, "end_lineno", node.lineno),
                         has_docstring=has_docstring,
                         docstring=docstring,
-                        doc_type=["docstring"]
+                        endpoint={},
+                        schema="",
+                        doc_type=[DocType.DOCSTRING.value]
                     )
-                    if self.endpoints.is_endpoint(func_component):
-                        func_component.doc_type.append("endpoint")
-                        func_component.api_methods = self.endpoints.endpoints[func_id]
+                    endpoint = self.endpoints.is_endpoint(func_component)
+                    if endpoint:
+                        func_component.doc_type.append(DocType.ENDPOINT.value)
+                        func_component.api_methods = endpoint
 
 
                     self.components[func_id] = func_component
@@ -782,6 +828,7 @@ class DependencyParser:
         except Exception as e:
             logger.warning(f"Error getting docstring: {e}")
             return False, ""
+
 
     def _get_source_segment(self, source: str, node: ast.AST) -> str:
         """Get source segment for an AST node"""
@@ -812,6 +859,7 @@ class DependencyParser:
         except Exception as e:
             logger.warning(f"Error getting source segment: {e}")
             return ""
+
 
     def _resolve_dependencies(self):
         """Second pass to resolve dependencies between components"""
@@ -853,6 +901,7 @@ class DependencyParser:
             except (SyntaxError, UnicodeDecodeError) as e:
                 logger.warning(f"Error analyzing dependencies in {file_path}: {e}")
 
+
     def _add_class_method_dependencies(self):
         """Third pass to make methods dependent on their class (except __init__)"""
         for component_id, component in tqdm(self.components.items(), desc="Method & Class dependencies", unit="method&class"):
@@ -865,6 +914,7 @@ class DependencyParser:
                 if class_id in self.components and self.components[class_id].component_type == 'class':
                     component.depends_on.add(class_id)
 
+
     def save_dependency_graph(self, storage_conn: Any) -> None:
         """Save the dependency graph to a JSON file"""
         # Convert to serializable format
@@ -875,6 +925,7 @@ class DependencyParser:
         storage_conn.save(serializable_components)
         
         logger.info(f"Save dependency graph to {storage_conn.db_path}")
+
 
     def load_dependency_graph(self, input_path: str) -> None:
         """Load the dependency graph from a JSON file"""

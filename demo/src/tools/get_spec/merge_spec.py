@@ -32,7 +32,7 @@ def merge_docs_into_openapi(generated_docs_path: str, openapi_spec_path: str, ou
 
                 openapi_path = openapi_spec["paths"].get(path, None).get(method, None)
 
-                if openapi_path:
+                if not openapi_path:
                     stats["endpoints_not_found"].append({
                     "component": component_id,
                     "endpoint": endpoint_key,

@@ -6,12 +6,14 @@ from pydantic import BaseModel, Field
 from typing import Dict, List, TypedDict, Annotated, Literal, Tuple, Optional, Any, Type
 import yaml
 from src.llm.base import BasicModel
-from src.dependency_analyzer.ast_parser import CodeComponent
+from src.dependency_analyzer.ast_parser import CodeComponent, DocType
 from src.llm.prompt import GENERATE_DOCSTRING_PROMPT, GENERATE_ENDPOINT_PROMPT, GENERATE_SYSTEM_PROMPT, GENERATE_SCHEMA_PROMPT
 from langchain.chat_models import init_chat_model
 from langgraph.graph import StateGraph, START, END
 from langgraph.types import Send
 from langchain.messages import HumanMessage, SystemMessage, AnyMessage
+
+
 
 
 class State(TypedDict):
@@ -113,6 +115,10 @@ class Generator(BasicModel):
     # Workflow node
     def _llm_call(self, state: WorkerState):
         """Worker using llm core for document generation"""
+        
+        if len(state["component"].doc_type) <= 1:
+            return {"worker_docs": [(state["component"].id ,{"docstring": "", "endpoint": {}, "schema": ""})]}
+
         source_code = state["component"].source_code
         doc_type = state["component"].doc_type
         api_methods = state["component"].api_methods
@@ -133,7 +139,7 @@ class Generator(BasicModel):
 
         system_prompt = SystemMessage(GENERATE_SYSTEM_PROMPT)
 
-        if "docstring" in doc_type:
+        if DocType.DOCSTRING.value in doc_type:
             user_prompt = HumanMessage(GENERATE_DOCSTRING_PROMPT.format(chain_of_thought= "", supporting_context=""))
             contexts = [[cot[0]], supporting_context, [cot[1]]]
             fit_contexts = self.context_window_fit(contexts=contexts, messages=[system_prompt, user_prompt])
@@ -144,11 +150,12 @@ class Generator(BasicModel):
             docs["docstring"] = result.content
             state["component"].has_docstring = True
             state["component"].docstring = result.content
+            
 
             self.messages_logger.info(f"System message: {system_prompt.content}\n\n Instruction: {user_prompt.content}\n\n result: {result.content}\n\n Token usage: {result.usage_metadata}")
             self.tokens_logger.info(f"Token usage: {result.usage_metadata}")
 
-        elif "endpoint" in doc_type:
+        if DocType.ENDPOINT.value in doc_type:
             for endpoint in api_methods:
                 method, path = endpoint.split(":")
                 user_prompt = HumanMessage(GENERATE_ENDPOINT_PROMPT.format(chain_of_thought= "", supporting_context="", method= method, path= path))
@@ -158,21 +165,24 @@ class Generator(BasicModel):
                 chain_of_thought = fit_contexts[0][0] + (fit_contexts[1][0] if fit_contexts[1] else "") 
                 user_prompt = HumanMessage(GENERATE_ENDPOINT_PROMPT.format(chain_of_thought= chain_of_thought, supporting_context=fit_supporting_context, method= method, path= path))
                 result = self.base_llm.invoke([system_prompt, user_prompt])
-                docs["endpoint"][endpoint] = result
+                docs["endpoint"][endpoint] = result.content
+                state["component"].endpoint[endpoint] = result.content
 
                 self.messages_logger.info(f"System message: {system_prompt.content}\n\n Instruction: {user_prompt.content}\n\n result: {result.content}\n\n Token usage: {result.usage_metadata}")
                 self.tokens_logger.info(f"Token usage: {result.usage_metadata}")
 
-        elif "schema" in doc_type:
+        if DocType.SCHEMA.value in doc_type:
             schema_name =(state["component"].id.split("."))[-1]
-            user_prompt = HumanMessage(GENERATE_SCHEMA_PROMPT.format(chain_of_thought= "", schema_name= schema_name))
+            user_prompt = HumanMessage(GENERATE_SCHEMA_PROMPT.format(chain_of_thought= "", schema_name= schema_name, supporting_context= ""))
             contexts = [[cot[0]], supporting_context, [cot[1]]]
             fit_contexts = self.context_window_fit(contexts=contexts, messages=[system_prompt, user_prompt])
             fit_supporting_context = "".join(fit_contexts[1])
             chain_of_thought = fit_contexts[0][0] + (fit_contexts[1][0] if fit_contexts[1] else "") 
             user_prompt = HumanMessage(GENERATE_SCHEMA_PROMPT.format(chain_of_thought= chain_of_thought, supporting_context=fit_supporting_context, schema_name= schema_name))
             result = self.base_llm.invoke([system_prompt, user_prompt])
-            docs["schema"] = result
+            docs["schema"] = result.content
+            state["component"].schema = result.content
+
 
             self.messages_logger.info(f"System message: {system_prompt.content}\n\n Instruction: {user_prompt.content}\n\n result: {result.content}\n\n Token usage: {result.usage_metadata}")
             self.tokens_logger.info(f"Token usage: {result.usage_metadata}")
@@ -187,6 +197,9 @@ class Generator(BasicModel):
             Args:
                 state: the state of the workflow
                 """
+        update_components = {c.id: c.to_dict() for c in state["components"] }
+        self.db_conn.save(update_components)
+
         document = {}
         for id, docs in state["worker_docs"]:
             document[id] = docs

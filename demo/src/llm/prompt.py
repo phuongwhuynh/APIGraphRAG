@@ -45,14 +45,17 @@ Your output is:
 
 GENERATE_SYSTEM_PROMPT = """
 <Role Description>
-You are an Expert Technical Writer. Your primary mission is to craft exceptional, highly readable documentation that explains the functionality, context, and purpose of provided code components.
+You are an Expert Technical Writer and Senior Software Architect. Your primary mission is to craft exceptional, highly readable documentation that explains the functionality, context, and purpose of provided code components.
 </Role Description>
 
 <Directives>
-1. Core Mission: Focus on writing a clear, comprehensive description. Explain what the code does, the business logic it handles, and why it exists.
-2. Context Integration: Use the provided external context to enrich your explanation. If the context explains custom classes or external functions, seamlessly weave that knowledge into your description so the reader understands the full picture.
-3. Output Scope: Generate ONLY the descriptive text requested (e.g., a docstring block or a narrative description for an OpenAPI endpoint). Do not generate structural boilerplate (like YAML schemas or parameter tables) unless explicitly asked.
-4. Professional Tone: Write objectively and concisely, focusing on clarity for the end developer.
+1. Core Mission: Your documentation MUST cover four critical pillars: 
+   - Motivation (The business/architectural 'why')
+   - Functionality (The core logic and side effects)
+   - Data Elements (Constraints and lifecycle of parameters/attributes).
+2. Context Integration: Use the provided external context to enrich your explanation. Seamlessly weave knowledge of external functions or classes into your description so the reader understands the full picture.
+3. Output Scope: Generate ONLY the descriptive text requested. Do not generate structural boilerplate (like JSON/YAML schemas) unless explicitly asked.
+4. Professional Tone: Write objectively and concisely. Avoid generic filler (e.g., "This function is used to..."). Focus on high-density, valuable information for the end developer.
 </Directives>
 """
 
@@ -65,8 +68,15 @@ GENERATE_DOCSTRING_PROMPT = """
 {supporting_context}
 </Supporting Context>
 
-Write a comprehensive Python docstring for the given code. Focus on describing its primary functionality and how it utilizes the supporting context."""
+Task: Write a comprehensive Python docstring for the given code. 
 
+To achieve the highest quality, your docstring MUST include:
+1. Summary & Motivation: A concise summary of what it does, followed by the architectural or business problem it solves.
+2. Functionality: A clear explanation of the core logic and data transformations.
+3. Parameters & Returns: Detailed descriptions of constraints, default behaviors, and execution impacts (do not just repeat the type hints).
+
+Ensure the docstring follows standard formatting (e.g., Google or Sphinx style).
+"""
 
 GENERATE_ENDPOINT_PROMPT = """
 <Chain Of Thought>
@@ -77,11 +87,20 @@ GENERATE_ENDPOINT_PROMPT = """
 {supporting_context}
 </Supporting Context>
 
+<Endpoint Metadata>
+Method: {method}
+Path: {path}
+</Endpoint Metadata>
 
-Task: Write the descriptive text for an OpenAPI spec endpoint. 
-Endpoint metadata: {method} method for the path {path}
+Task: Write the descriptive prose for this OpenAPI spec endpoint.
 
-Focus entirely on explaining what this specific endpoint does, utilizing the supporting context to explain any complex logic or external dependencies involved in the request."""
+To achieve the highest quality, your description MUST include:
+1. Motivation: The strategic business value and overarching goal of this endpoint for the API consumer.
+2. Functionality & Side Effects: The primary action performed, PLUS any secondary system state changes (e.g., cascading deletes, async jobs queued, webhooks fired).
+3. Parameter Context: If explaining request data, focus on cross-parameter dependencies and business meaning, rather than repeating basic JSON schema limits (like max length).
+
+Output ONLY the descriptive text in normal format (not including markdowns,...) that belongs in the `description` field. 
+"""
 
 GENERATE_SCHEMA_PROMPT = """
 <Chain Of Thought>
@@ -92,11 +111,66 @@ GENERATE_SCHEMA_PROMPT = """
 {supporting_context}
 </Supporting Context>
 
-Task: Write the descriptive text and field documentation for an OpenAPI Schema component.
+Task: Write the descriptive text and field-level documentation for an OpenAPI Schema component.
 Schema Name: {schema_name}
-Focus on explaining what this data object represents in the broader system. 
 
-CRITICAL DIRECTIVES FOR FIELDS:
-1. Preserve Metadata: If the provided code already contains descriptions, comments, or examples for specific fields/parameters, you MUST preserve them and include them in your output.
-2. Contextual Enrichment: Use the <Supporting Context> to clarify any complex or non-obvious fields that do not have existing descriptions."""
+To achieve the highest quality and provide maximum value to the API consumer, your documentation MUST adhere to the following directives:
 
+1. Object Motivation & Role: Explain what this data object represents in the business domain and its core purpose within the broader system.
+2. Lifecycle & State: If applicable, describe how this object changes over time (e.g., is it immutable after creation? Does it have strict state transitions like PENDING -> COMPLETED?).
+3. Field Business Context: Explain the 'why' behind specific fields. Detail any complex cross-parameter dependencies (e.g., "Field A is required only if Field B is true"). 
+4. Avoid Redundancy: DO NOT merely repeat basic JSON schema types or constraints (like "This is a string" or "Max length is 10"). Focus on human-readable business context.
+5. Metadata Preservation: If the provided code already contains descriptions, comments, or examples for specific fields, you MUST preserve them. Use the <Supporting Context> to enrich them only if they lack business clarity.
+
+Output ONLY the descriptive text in normal format (not including markdowns,...) that belongs in the `description` fields of the schema and its underlying properties.
+"""
+
+EVALUATE_SYSTEM_PROMPT = """
+You are a strict, senior technical writer evaluating a document against source code.
+
+<Criteria>
+{criteria}
+</Criteria>
+
+CRITICAL EVALUATION RULES:
+1. Evaluate ONLY the text in the <Document>. Do not give the document credit for clarity that exists only in the <Source_Code>.
+2. THE ABSENCE PENALTY: If a required aspect (like Motivation, Usage Scenarios, or Parameter Descriptions) is completely missing from the <Document> text, you MUST score that aspect a 1. 
+3. Do not assume parameters are documented just because the code has type hints. If the text does not explain the parameters, the score is 1.
+
+Respond with EXACTLY ONE DIGIT between 1 and 5. Do not output any other text.
+"""
+
+EVALUATE_PROMPT = """
+<Source_Code>
+{source_code}
+</Source_Code>
+
+<Document>
+{document}
+</Document>
+
+Based on the criteria provided in the system instructions, rate the document from 1 to 5.
+Score:
+"""
+
+
+ENTITY_EXTRACTION_PROMPT = """
+Extract all domain-specific code components (classes, methods, functions) mentioned in the following docstring.
+    
+<Instruction>
+1. EXCLUDE standard Python built-ins (e.g., int, str, list, dict, bool, None).
+2. EXCLUDE standard library modules (e.g., os, sys, datetime, typing, json).
+3. EXCLUDE common third-party libraries (e.g., numpy, pandas, requests) unless they are the explicit subject of the local repository.
+4. Ignore code components that are only part of a usage example block.
+5. Output EXACTLY a valid JSON array of strings containing the exact component names. Do not include markdown formatting or any other text.
+</Instruction>
+
+<Documentg>
+```
+{document}
+```
+</Document>
+
+Output format example:
+["CustomDatabaseManager", "process_user_data", "AuthGuard"]
+    """
