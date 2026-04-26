@@ -142,8 +142,8 @@ if __name__ == "__main__":
 
     #             pbar.update(len(batch))
 
-    merge_docs_into_openapi(
-        GENERATE_OUTPUT_FILEPATH,
-        OPENAPI_SPEC_PATH.with_suffix(".json"),
-        RESULTED_OPENAPI_SPEC_PATH.with_suffix(".json"),
-    )
+    # merge_docs_into_openapi(
+    #     GENERATE_OUTPUT_FILEPATH,
+    #     OPENAPI_SPEC_PATH.with_suffix(".json"),
+    #     RESULTED_OPENAPI_SPEC_PATH.with_suffix(".json"),
+    # )

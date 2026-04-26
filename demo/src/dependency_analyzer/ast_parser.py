@@ -50,8 +50,8 @@ class CodeComponent:
     # AST node representing this component
     node: ast.AST
 
-    # Type of component: 'class', 'function', 'method', 'parameter' (for path and query parameter)
-    component_type: Literal["class", "function", "method", "parameter"]
+    # Type of component: 'class', 'function', 'method', 'parameter' (for path and query parameter), 'global' (for global variables/constants)
+    component_type: Literal["class", "function", "method", "parameter", "global"]
 
     # Full path to the file containing this component
     file_path: str
@@ -520,7 +520,7 @@ class OpenAPICollector:
             return False
 
         if component.id in self.schemas:
-            print("schemaschema")
+            # print("schemaschema")
             return True
 
         # The known base classes that indicate a schema
@@ -538,14 +538,14 @@ class OpenAPICollector:
             if isinstance(base, ast.Name):
                 if base.id in schema_identifiers:
                     self.schemas.add(component.id)
-                    print("schemaschema")
+                    # print("schemaschema")
                     return True
 
             # 2. Catch attributed inheritance: class User(pydantic.BaseModel):
             elif isinstance(base, ast.Attribute):
                 if base.attr in schema_identifiers:
                     self.schemas.add(component.id)
-                    print("schemaschema")
+                    # print("schemaschema")
                     return True
 
         return False
@@ -754,6 +754,45 @@ class DependencyParser:
         except (SyntaxError, UnicodeDecodeError) as e:
             logger.warning(f"Error parsing {file_path}: {e}")
 
+    def _collect_global_assignments(
+        self,
+        tree: ast.AST,
+        file_path: str,
+        relative_path: str,
+        module_path: str,
+        source: str,
+        import_collector: "ImportCollector",
+    ) -> None:
+        """Collect global variable assignments as CodeComponents (component_type='global')."""
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Assign)
+                and len(node.targets) == 1
+                and isinstance(node.targets[0], ast.Name)
+                and isinstance(getattr(node, "parent", None), ast.Module)
+            ):
+                var_name = node.targets[0].id
+                var_id = f"{module_path}.{var_name}"
+                global_component = CodeComponent(
+                    id=var_id,
+                    node=node,
+                    component_type="global",
+                    file_path=file_path,
+                    relative_path=relative_path,
+                    imports=import_collector.imports,
+                    from_imports=import_collector.from_imports,
+                    depends_on=set(),
+                    source_code=self._get_source_segment(source, node),
+                    start_line=getattr(node, "lineno", 0),
+                    end_line=getattr(node, "end_lineno", getattr(node, "lineno", 0)),
+                    has_docstring=False,
+                    docstring="",
+                    endpoint={},
+                    schema="",
+                    doc_type=[DocType.DOCSTRING.value],
+                )
+                self.components[var_id] = global_component
+
     def _collect_components(
         self,
         tree: ast.AST,
@@ -766,6 +805,9 @@ class DependencyParser:
 
         import_collector = ImportCollector(module_path)
         import_collector.visit(tree)
+        self._collect_global_assignments(
+            tree, file_path, relative_path, module_path, source, import_collector
+        )
         for node in ast.walk(tree):
             # Collect class definition
             if isinstance(node, ast.ClassDef):
@@ -838,6 +880,34 @@ class DependencyParser:
                             method_component.doc_type.append(DocType.ENDPOINT.value)
                             method_component.api_methods = endpoint
 
+                            param_ids = []
+                            for arg in item.args.args:
+                                if arg.arg in EXCLUDED_NAMES:
+                                    continue
+                                param_id = f"{method_id}.{arg.arg}"
+                                start_line = getattr(arg, "lineno", item.lineno)
+                                end_line = getattr(arg, "end_lineno", start_line)
+                                param_component = CodeComponent(
+                                    id=param_id,
+                                    node=arg,
+                                    component_type="parameter",
+                                    file_path=file_path,
+                                    relative_path=relative_path,
+                                    imports=import_collector.imports,
+                                    from_imports=import_collector.from_imports,
+                                    depends_on=set(),
+                                    source_code=self._get_source_segment(source, arg),
+                                    start_line=start_line,
+                                    end_line=end_line,
+                                    has_docstring=False,
+                                    docstring="",
+                                    endpoint={},
+                                    schema="",
+                                    doc_type=[DocType.DOCSTRING.value],
+                                )
+                                self.components[param_id] = param_component
+                                param_ids.append(param_id)
+                            method_component.depends_on.update(param_ids)
                         self.components[method_id] = method_component
 
             elif isinstance(
@@ -872,6 +942,34 @@ class DependencyParser:
                         func_component.doc_type.append(DocType.ENDPOINT.value)
                         func_component.api_methods = endpoint
 
+                        param_ids = []
+                        for arg in node.args.args:
+                            if arg.arg in EXCLUDED_NAMES:
+                                continue
+                            param_id = f"{func_id}.{arg.arg}"
+                            start_line = getattr(arg, "lineno", node.lineno)
+                            end_line = getattr(arg, "end_lineno", start_line)
+                            param_component = CodeComponent(
+                                id=param_id,
+                                node=arg,
+                                component_type="parameter",
+                                file_path=file_path,
+                                relative_path=relative_path,
+                                imports=import_collector.imports,
+                                from_imports=import_collector.from_imports,
+                                depends_on=set(),
+                                source_code=self._get_source_segment(source, arg),
+                                start_line=start_line,
+                                end_line=end_line,
+                                has_docstring=False,
+                                docstring="",
+                                endpoint={},
+                                schema="",
+                                doc_type=[DocType.DOCSTRING.value],
+                            )
+                            self.components[param_id] = param_component
+                            param_ids.append(param_id)
+                        func_component.depends_on.update(param_ids)
                     self.components[func_id] = func_component
 
     def _get_docstring(self, source: str, node: ast.AST) -> Tuple[bool, str]:
@@ -961,7 +1059,12 @@ class DependencyParser:
                     for arg in component_node.args.args:
                         dependency_collector.local_variable.add(arg.arg)
 
-                dependency_collector.visit(component_node)
+                if component.component_type == "parameter" and hasattr(
+                    component_node, "annotation"
+                ):
+                    dependency_collector._process_annotation(component_node.annotation)
+                else:
+                    dependency_collector.visit(component_node)
 
                 # Add dependencies to the component:
                 component.depends_on.update(dependency_collector.dependencies)
@@ -1002,6 +1105,18 @@ class DependencyParser:
         }
 
         storage_conn.save(serializable_components)
+        try:
+            out_path = (
+                Path(self.output_dir)
+                if not isinstance(self.output_dir, Path)
+                else self.output_dir
+            )
+            out_path.mkdir(parents=True, exist_ok=True)
+            json_file = out_path / "dependency_graph.json"
+            with open(json_file, "w", encoding="utf-8") as f:
+                json.dump(serializable_components, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            logger.warning(f"Error saving dependency graph to JSON file: {e}")
 
         logger.info(f"Save dependency graph to {storage_conn.db_path}")
 
