@@ -7,25 +7,28 @@ from typing import Literal, Optional
 
 logger = logging.getLogger(__name__)
 
+
 class SpecGetterException(Exception):
     pass
+
 
 class SpecGetterFactory:
     """
     Unified Factory to instantiate the correct framework spec getter based on mode (local vs docker).
     """
+
     @staticmethod
     def create(
-        framework: Literal["django", "fastapi", "flask"], 
+        framework: Literal["django", "fastapi", "flask"],
         mode: Literal["local", "docker"],
-        project_dir: str, 
-        output_dir: str, 
+        project_dir: str,
+        output_dir: str,
         app_instance_path: str,
         # Local specific
         python_exec: Optional[str] = None,
         # Docker specific
-        compose_file: Optional[str] = "docker-compose.yml", 
-        service_name: str = "app"
+        compose_file: Optional[str] = "docker-compose.yml",
+        service_name: str = "app",
     ):
 
         if mode == "local":
@@ -50,8 +53,10 @@ class SpecGetterFactory:
             getter_class = getters.get(framework)
             if not getter_class:
                 raise ValueError(f"Unsupported framework: {framework} for docker mode.")
-            return getter_class(project_dir, output_dir, app_instance_path, compose_file, service_name)
-        
+            return getter_class(
+                project_dir, output_dir, app_instance_path, compose_file, service_name
+            )
+
         else:
             raise ValueError(f"Unsupported mode: {mode}. Use 'local' or 'docker'.")
 
@@ -60,27 +65,41 @@ class SpecGetterFactory:
 # BASE SHARED LOGIC
 # =========================================================================================
 
+
 class BaseSpecGetter:
     file_extension = ".json"
 
-    def __init__(self, project_dir: str, output_dir: str, app_instance_path: Optional[str]):
+    def __init__(
+        self, project_dir: str, output_dir: str, app_instance_path: Optional[str]
+    ):
         self.project_dir = Path(project_dir).resolve()
         self.app_instance_path = app_instance_path
-        
+
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
-        self.output_file = (output_path / self.project_dir.name).with_suffix(self.file_extension)
+        self.output_file = (output_path / self.project_dir.name).with_suffix(
+            self.file_extension
+        )
 
     def load(self):
         """
         Memory efficient line-by-line reading of the generated JSON or YAML file.
         Detects endpoints progressively to prevent Out-Of-Memory errors on massive spec dumps.
         """
-        with open(self.output_file, 'r', encoding='utf-8') as f:
+        with open(self.output_file, "r", encoding="utf-8") as f:
             in_paths = False
             current_path = None
-            valid_methods = {"get", "post", "put", "patch", "delete", "options", "head", "trace"}
-            
+            valid_methods = {
+                "get",
+                "post",
+                "put",
+                "patch",
+                "delete",
+                "options",
+                "head",
+                "trace",
+            }
+
             for line in f:
                 if self.file_extension == ".json":
                     # JSON Logic
@@ -88,28 +107,38 @@ class BaseSpecGetter:
                         if line.startswith('  "paths":'):
                             in_paths = True
                         continue
-                    if line.startswith('  }'):
-                        break  
+                    if line.startswith("  }"):
+                        break
                     if line.startswith('    "/') and '": {' in line:
                         current_path = line.strip().split('":')[0].strip('"')
                     elif current_path and line.startswith('      "') and '": {' in line:
                         method = line.strip().split('":')[0].strip('"').lower()
                         if method in valid_methods:
                             yield f"{method}:{current_path}"
-                            
+
                 elif self.file_extension == ".yaml":
                     # YAML Logic (drf-spectacular default)
                     if not in_paths:
-                        if line.startswith('paths:'):
+                        if line.startswith("paths:"):
                             in_paths = True
                         continue
                     if in_paths:
-                        if line and not line.startswith(' ') and not line.startswith('\n') and not line.startswith('#'):
+                        if (
+                            line
+                            and not line.startswith(" ")
+                            and not line.startswith("\n")
+                            and not line.startswith("#")
+                        ):
                             break
-                        if line.startswith('  /') and not line.startswith('   '):
-                            current_path = line.strip().rstrip(':').strip("'\"")
-                        elif current_path and line.startswith('    ') and not line.startswith('      ') and line.endswith(':\n'):
-                            method = line.strip().rstrip(':').strip("'\"").lower()
+                        if line.startswith("  /") and not line.startswith("   "):
+                            current_path = line.strip().rstrip(":").strip("'\"")
+                        elif (
+                            current_path
+                            and line.startswith("    ")
+                            and not line.startswith("      ")
+                            and line.endswith(":\n")
+                        ):
+                            method = line.strip().rstrip(":").strip("'\"").lower()
                             if method in valid_methods:
                                 yield f"{method}:{current_path}"
 
@@ -119,31 +148,41 @@ class BaseSpecGetter:
 
     def _process_map(self, raw_map: dict) -> dict:
         """
-        Filters out internal routes by comparing against API endpoints, 
+        Filters out internal routes by comparing against API endpoints,
         and inverts the dictionary mapping format.
         Returns: { "module.function": ["/api/v1/endpoint", ...] }
         """
         import re
+
         api_endpoints = self.endpoints()
-        
+
         def normalize(p: str) -> str:
             # Strip out different route parameter definitions across formats to match them
-            p = re.sub(r'\{[^}]+\}', '{}', p)
-            p = re.sub(r'<[^>]+>', '{}', p)
-            p = re.sub(r'\(\?P<[^>]+>[^\)]+\)', '{}', p)
+            p = re.sub(r"\{[^}]+\}", "{}", p)
+            p = re.sub(r"<[^>]+>", "{}", p)
+            p = re.sub(r"\(\?P<[^>]+>[^\)]+\)", "{}", p)
             # Remove regex formatting from django
-            p = p.replace('^', '').replace('$', '')
-            
+            p = p.replace("^", "").replace("$", "")
+
             # Extract method if it exists
-            parts = p.split(':', 1)
-            if len(parts) == 2 and parts[0] in {"get", "post", "put", "patch", "delete", "options", "head", "trace"}:
+            parts = p.split(":", 1)
+            if len(parts) == 2 and parts[0] in {
+                "get",
+                "post",
+                "put",
+                "patch",
+                "delete",
+                "options",
+                "head",
+                "trace",
+            }:
                 return f"{parts[0]}:{parts[1].strip('/')}"
             else:
-                return p.strip('/')
+                return p.strip("/")
 
         # Precompute normalized OpenAPI endpoints
         normalized_apis = {normalize(ep): ep for ep in api_endpoints}
-        
+
         processed = {}
         for raw_url, func_list in raw_map.items():
             # If the intermediate map wasn't returning a list (like from an older run or unsupported change), wrap it to avoid breaking
@@ -152,7 +191,7 @@ class BaseSpecGetter:
 
             norm_raw = normalize(raw_url)
             has_method = ":" in norm_raw
-            
+
             matched_eps = []
             if has_method:
                 if norm_raw in normalized_apis:
@@ -160,15 +199,21 @@ class BaseSpecGetter:
                 else:
                     # Fuzzy fallback matching
                     for api_n, original_ep in normalized_apis.items():
-                        if norm_raw == api_n or (api_n and norm_raw and norm_raw.endswith(api_n.split(':', 1)[-1])):
+                        if norm_raw == api_n or (
+                            api_n
+                            and norm_raw
+                            and norm_raw.endswith(api_n.split(":", 1)[-1])
+                        ):
                             # Enforce method matching if fuzzy matching path
-                            if api_n.startswith(norm_raw.split(':', 1)[0] + ':'):
+                            if api_n.startswith(norm_raw.split(":", 1)[0] + ":"):
                                 matched_eps.append(original_ep)
             else:
                 # No method specified - Map to ALL generated methods for this exact path
                 for api_n, original_ep in normalized_apis.items():
-                    api_n_path = api_n.split(':', 1)[-1]
-                    if norm_raw == api_n_path or (api_n_path and norm_raw and norm_raw.endswith(api_n_path)):
+                    api_n_path = api_n.split(":", 1)[-1]
+                    if norm_raw == api_n_path or (
+                        api_n_path and norm_raw and norm_raw.endswith(api_n_path)
+                    ):
                         matched_eps.append(original_ep)
 
             # Add uniquely
@@ -178,7 +223,7 @@ class BaseSpecGetter:
                         processed[func] = []
                     if matched_ep not in processed[func]:
                         processed[func].append(matched_ep)
-                    
+
         return processed
 
     def get_spec(self) -> bool:
@@ -191,7 +236,7 @@ class BaseSpecGetter:
         if not self.app_instance_path:
             self.app_instance_path = "main:app"
         module_name, object_name = self.app_instance_path.split(":")
-        
+
         return f"""
 import sys, json, traceback
 sys.path.insert(0, r'{self.project_dir}')
@@ -206,8 +251,8 @@ except Exception:
 
     def _build_flask_script(self, target_output_path: str) -> str:
         module_name, object_name = self.app_instance_path.split(":")
-        base_module_name = module_name.split('.')[0]
-        
+        base_module_name = module_name.split(".")[0]
+
         return f"""
 import sys, json, traceback, importlib
 sys.path.insert(0, r'{self.project_dir}')
@@ -258,8 +303,12 @@ except Exception:
 """
 
     def _build_django_map_script(self, target_output_path: str) -> str:
-        manage_py_dir = Path(self.app_instance_path).parent if self.app_instance_path else self.project_dir
-        
+        manage_py_dir = (
+            Path(self.app_instance_path).parent
+            if self.app_instance_path
+            else self.project_dir
+        )
+
         return f"""
 import sys, json, traceback, os
 import django
@@ -320,7 +369,7 @@ except Exception:
         if not self.app_instance_path:
             self.app_instance_path = "main:app"
         module_name, object_name = self.app_instance_path.split(":")
-        
+
         return f"""
 import sys, json, traceback
 sys.path.insert(0, r'{self.project_dir}')
@@ -353,8 +402,8 @@ except Exception:
 
     def _build_flask_map_script(self, target_output_path: str) -> str:
         module_name, object_name = self.app_instance_path.split(":")
-        base_module_name = module_name.split('.')[0]
-        
+        base_module_name = module_name.split(".")[0]
+
         return f"""
 import sys, json, traceback, importlib
 sys.path.insert(0, r'{self.project_dir}')
@@ -404,8 +453,15 @@ except Exception:
 # LOCAL EXECUTION MODE
 # =========================================================================================
 
+
 class LocalBaseGetter(BaseSpecGetter):
-    def __init__(self, project_dir: str, output_dir: str, app_instance_path: Optional[str], python_exec: str):
+    def __init__(
+        self,
+        project_dir: str,
+        output_dir: str,
+        app_instance_path: Optional[str],
+        python_exec: str,
+    ):
         super().__init__(project_dir, output_dir, app_instance_path)
         self.python_exec = str(Path(python_exec))
 
@@ -427,15 +483,23 @@ class LocalBaseGetter(BaseSpecGetter):
     def endpoint_func_map(self) -> dict:
         raise NotImplementedError
 
+
 class DjangoLocalGetter(LocalBaseGetter):
     file_extension = ".yaml"
+
     def get_spec(self) -> bool:
         if not self.output_file.exists():
             self.output_file.touch()
         # Find manage.py (might be at root or one level deep like netbox/netbox)
         manage_py_path = self.app_instance_path
 
-        command = [self.python_exec, str(manage_py_path), 'spectacular', '--file', str(self.output_file)]
+        command = [
+            self.python_exec,
+            str(manage_py_path),
+            "spectacular",
+            "--file",
+            str(self.output_file),
+        ]
         try:
             subprocess.run(command, check=True, capture_output=True, text=True)
             return True
@@ -447,21 +511,25 @@ class DjangoLocalGetter(LocalBaseGetter):
         map_file = self.output_file.with_name(f"{self.output_file.stem}_map.json")
         script = self._build_django_map_script(str(map_file))
         if self.run_local_extractor(script) and map_file.exists():
-            with open(map_file, 'r', encoding='utf-8') as f:
+            with open(map_file, "r", encoding="utf-8") as f:
                 return self._process_map(json.load(f))
         return {}
 
+
 class FastAPILocalGetter(LocalBaseGetter):
     def get_spec(self) -> bool:
-        return self.run_local_extractor(self._build_fastapi_script(str(self.output_file)))
+        return self.run_local_extractor(
+            self._build_fastapi_script(str(self.output_file))
+        )
 
     def endpoint_func_map(self) -> dict:
         map_file = self.output_file.with_name(f"{self.output_file.stem}_map.json")
         script = self._build_fastapi_map_script(str(map_file))
         if self.run_local_extractor(script) and map_file.exists():
-            with open(map_file, 'r', encoding='utf-8') as f:
+            with open(map_file, "r", encoding="utf-8") as f:
                 return self._process_map(json.load(f))
         return {}
+
 
 class FlaskLocalGetter(LocalBaseGetter):
     def get_spec(self) -> bool:
@@ -471,23 +539,34 @@ class FlaskLocalGetter(LocalBaseGetter):
         map_file = self.output_file.with_name(f"{self.output_file.stem}_map.json")
         script = self._build_flask_map_script(str(map_file))
         if self.run_local_extractor(script) and map_file.exists():
-            with open(map_file, 'r', encoding='utf-8') as f:
+            with open(map_file, "r", encoding="utf-8") as f:
                 return self._process_map(json.load(f))
         return {}
-
 
 
 # =========================================================================================
 # DOCKER EXECUTION MODE
 # =========================================================================================
 
+
 class DockerBaseGetter(BaseSpecGetter):
-    def __init__(self, project_dir: str, output_dir: str, app_instance_path: Optional[str], compose_file: str, service_name: str):
+    def __init__(
+        self,
+        project_dir: str,
+        output_dir: str,
+        app_instance_path: Optional[str],
+        compose_file: str,
+        service_name: str,
+    ):
         super().__init__(project_dir, output_dir, app_instance_path)
         self.service_name = service_name
-        
+
         compose_path = Path(compose_file)
-        self.compose_file = compose_path if compose_path.is_absolute() else (self.project_dir / compose_file).resolve()
+        self.compose_file = (
+            compose_path
+            if compose_path.is_absolute()
+            else (self.project_dir / compose_file).resolve()
+        )
 
     def get_spec(self) -> bool:
         if not self.compose_file.exists():
@@ -496,13 +575,20 @@ class DockerBaseGetter(BaseSpecGetter):
 
         try:
             logger.info("Spinning up Docker environment...")
-            subprocess.run(["docker", "compose", "-f", str(self.compose_file), "up", "-d"], cwd=self.project_dir, check=True)
-            time.sleep(5) # Allow container initialization
-            
+            subprocess.run(
+                ["docker", "compose", "-f", str(self.compose_file), "up", "-d"],
+                cwd=self.project_dir,
+                check=True,
+            )
+            time.sleep(5)  # Allow container initialization
+
             return self._extract_spec_with_retry()
         finally:
             logger.info("Tearing down Docker environment...")
-            subprocess.run(["docker", "compose", "-f", str(self.compose_file), "down", "-v"], cwd=self.project_dir)
+            subprocess.run(
+                ["docker", "compose", "-f", str(self.compose_file), "down", "-v"],
+                cwd=self.project_dir,
+            )
 
     def _extract_spec_with_retry(self, max_retries=10, delay_seconds=5) -> bool:
         logger.info(f"Waiting for '{self.service_name}' to be ready...")
@@ -521,8 +607,17 @@ class DockerBaseGetter(BaseSpecGetter):
     def _copy_file_from_container(self) -> bool:
         try:
             subprocess.run(
-                ["docker", "compose", "-f", str(self.compose_file), "cp", f"{self.service_name}:/tmp/schema_dump.json", str(self.output_file)],
-                cwd=self.project_dir, check=True
+                [
+                    "docker",
+                    "compose",
+                    "-f",
+                    str(self.compose_file),
+                    "cp",
+                    f"{self.service_name}:/tmp/schema_dump.json",
+                    str(self.output_file),
+                ],
+                cwd=self.project_dir,
+                check=True,
             )
             return True
         except subprocess.CalledProcessError:
@@ -534,23 +629,53 @@ class DockerBaseGetter(BaseSpecGetter):
     def _copy_map_from_container(self, map_file: Path) -> dict:
         try:
             subprocess.run(
-                ["docker", "compose", "-f", str(self.compose_file), "cp", f"{self.service_name}:/tmp/map_dump.json", str(map_file)],
-                cwd=self.project_dir, check=True
+                [
+                    "docker",
+                    "compose",
+                    "-f",
+                    str(self.compose_file),
+                    "cp",
+                    f"{self.service_name}:/tmp/map_dump.json",
+                    str(map_file),
+                ],
+                cwd=self.project_dir,
+                check=True,
             )
             if map_file.exists():
-                with open(map_file, 'r', encoding='utf-8') as f:
+                print("Successfully copied mapping file from Docker container.")
+                with open(map_file, "r", encoding="utf-8") as f:
                     return self._process_map(json.load(f))
         except subprocess.CalledProcessError:
             pass
+        print(
+            "Failed to copy mapping file from Docker container. Endpoint-function mapping will be unavailable."
+        )
         return {}
+
 
 class DjangoDockerGetter(DockerBaseGetter):
     def _run_extraction_command(self) -> bool:
         try:
             subprocess.run(
-                ["docker", "compose", "-f", str(self.compose_file), "exec", "-T", self.service_name, 
-                 "python", "manage.py", "spectacular", "--format", "openapi-json", "--file", "/tmp/schema_dump.json"],
-                cwd=self.project_dir, check=True, capture_output=True
+                [
+                    "docker",
+                    "compose",
+                    "-f",
+                    str(self.compose_file),
+                    "exec",
+                    "-T",
+                    self.service_name,
+                    "python",
+                    "manage.py",
+                    "spectacular",
+                    "--format",
+                    "openapi-json",
+                    "--file",
+                    "/tmp/schema_dump.json",
+                ],
+                cwd=self.project_dir,
+                check=True,
+                capture_output=True,
             )
             return True
         except subprocess.CalledProcessError:
@@ -564,25 +689,59 @@ class DjangoDockerGetter(DockerBaseGetter):
         extractor_code = self._build_django_map_script("/tmp/map_dump.json")
         try:
             logger.info("Spinning up Docker environment for mapping...")
-            subprocess.run(["docker", "compose", "-f", str(self.compose_file), "up", "-d"], cwd=self.project_dir, check=True)
+            subprocess.run(
+                ["docker", "compose", "-f", str(self.compose_file), "up", "-d"],
+                cwd=self.project_dir,
+                check=True,
+            )
             time.sleep(5)
             subprocess.run(
-                ["docker", "compose", "-f", str(self.compose_file), "exec", "-T", self.service_name, "python"],
-                input=extractor_code, text=True, cwd=self.project_dir, check=True, capture_output=True
+                [
+                    "docker",
+                    "compose",
+                    "-f",
+                    str(self.compose_file),
+                    "exec",
+                    "-T",
+                    self.service_name,
+                    "python",
+                ],
+                input=extractor_code,
+                text=True,
+                cwd=self.project_dir,
+                check=True,
+                capture_output=True,
             )
             return self._copy_map_from_container(map_file)
         except subprocess.CalledProcessError:
             return {}
         finally:
-            subprocess.run(["docker", "compose", "-f", str(self.compose_file), "down", "-v"], cwd=self.project_dir)
+            subprocess.run(
+                ["docker", "compose", "-f", str(self.compose_file), "down", "-v"],
+                cwd=self.project_dir,
+            )
+
 
 class FastAPIDockerGetter(DockerBaseGetter):
     def _run_extraction_command(self) -> bool:
         extractor_code = self._build_fastapi_script("/tmp/schema_dump.json")
         try:
             subprocess.run(
-                ["docker", "compose", "-f", str(self.compose_file), "exec", "-T", self.service_name, "python"],
-                input=extractor_code, text=True, cwd=self.project_dir, check=True, capture_output=True
+                [
+                    "docker",
+                    "compose",
+                    "-f",
+                    str(self.compose_file),
+                    "exec",
+                    "-T",
+                    self.service_name,
+                    "python",
+                ],
+                input=extractor_code,
+                text=True,
+                cwd=self.project_dir,
+                check=True,
+                capture_output=True,
             )
             return True
         except subprocess.CalledProcessError:
@@ -591,34 +750,70 @@ class FastAPIDockerGetter(DockerBaseGetter):
     def endpoint_func_map(self) -> dict:
         if not self.compose_file.exists():
             return {}
-            
+
         map_file = self.output_file.with_name(f"{self.output_file.stem}_map.json")
         extractor_code = self._build_fastapi_map_script("/tmp/map_dump.json")
         try:
-            logger.info("Spinning up Docker environment for mapping...")
-            subprocess.run(["docker", "compose", "-f", str(self.compose_file), "up", "-d"], cwd=self.project_dir, check=True)
+            print("Spinning up Docker environment for mapping...")
+            subprocess.run(
+                ["docker", "compose", "-f", str(self.compose_file), "up", "-d"],
+                cwd=self.project_dir,
+                check=True,
+            )
             time.sleep(5)
             subprocess.run(
-                ["docker", "compose", "-f", str(self.compose_file), "exec", "-T", self.service_name, "python"],
-                input=extractor_code, text=True, cwd=self.project_dir, check=True, capture_output=True
+                [
+                    "docker",
+                    "compose",
+                    "-f",
+                    str(self.compose_file),
+                    "exec",
+                    "-T",
+                    self.service_name,
+                    "python",
+                ],
+                input=extractor_code,
+                text=True,
+                cwd=self.project_dir,
+                check=True,
+                capture_output=True,
             )
             return self._copy_map_from_container(map_file)
         except subprocess.CalledProcessError:
             return {}
         finally:
-            subprocess.run(["docker", "compose", "-f", str(self.compose_file), "down", "-v"], cwd=self.project_dir)
+            subprocess.run(
+                ["docker", "compose", "-f", str(self.compose_file), "down", "-v"],
+                cwd=self.project_dir,
+            )
+
 
 class FlaskDockerGetter(DockerBaseGetter):
     def _run_extraction_command(self) -> bool:
         if not self.app_instance_path:
-            logger.error("app_instance_path is minimally required for Flask Docker execution.")
+            logger.error(
+                "app_instance_path is minimally required for Flask Docker execution."
+            )
             return False
-            
+
         extractor_code = self._build_flask_script("/tmp/schema_dump.json")
         try:
             subprocess.run(
-                ["docker", "compose", "-f", str(self.compose_file), "exec", "-T", self.service_name, "python"],
-                input=extractor_code, text=True, cwd=self.project_dir, check=True, capture_output=True
+                [
+                    "docker",
+                    "compose",
+                    "-f",
+                    str(self.compose_file),
+                    "exec",
+                    "-T",
+                    self.service_name,
+                    "python",
+                ],
+                input=extractor_code,
+                text=True,
+                cwd=self.project_dir,
+                check=True,
+                capture_output=True,
             )
             return True
         except subprocess.CalledProcessError as e:
@@ -628,19 +823,39 @@ class FlaskDockerGetter(DockerBaseGetter):
     def endpoint_func_map(self) -> dict:
         if not self.compose_file.exists():
             return {}
-            
+
         map_file = self.output_file.with_name(f"{self.output_file.stem}_map.json")
         extractor_code = self._build_flask_map_script("/tmp/map_dump.json")
         try:
             logger.info("Spinning up Docker environment for mapping...")
-            subprocess.run(["docker", "compose", "-f", str(self.compose_file), "up", "-d"], cwd=self.project_dir, check=True)
+            subprocess.run(
+                ["docker", "compose", "-f", str(self.compose_file), "up", "-d"],
+                cwd=self.project_dir,
+                check=True,
+            )
             time.sleep(5)
             subprocess.run(
-                ["docker", "compose", "-f", str(self.compose_file), "exec", "-T", self.service_name, "python"],
-                input=extractor_code, text=True, cwd=self.project_dir, check=True, capture_output=True
+                [
+                    "docker",
+                    "compose",
+                    "-f",
+                    str(self.compose_file),
+                    "exec",
+                    "-T",
+                    self.service_name,
+                    "python",
+                ],
+                input=extractor_code,
+                text=True,
+                cwd=self.project_dir,
+                check=True,
+                capture_output=True,
             )
             return self._copy_map_from_container(map_file)
         except subprocess.CalledProcessError:
             return {}
         finally:
-            subprocess.run(["docker", "compose", "-f", str(self.compose_file), "down", "-v"], cwd=self.project_dir)
+            subprocess.run(
+                ["docker", "compose", "-f", str(self.compose_file), "down", "-v"],
+                cwd=self.project_dir,
+            )
