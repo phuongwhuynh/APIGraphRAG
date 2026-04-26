@@ -17,6 +17,7 @@ from src.llm.generate import Generator
 from src.database.storage import Storage
 from langchain_core.runnables import RunnableConfig
 from src.tools.get_spec.merge_spec import merge_docs_into_openapi
+from src.tools.json.json import save_as_json, load_json
 
 
 CURRENT_PATH = Path(__file__)
@@ -27,41 +28,6 @@ RESULTED_OPENAPI_SPEC_PATH = OUTPUT_DIR / ("resulted_" + REPO_DIR.name)
 RANK_OUTPUT_FILEPATH = OUTPUT_DIR / "rank_output.json"
 COT_OUTPUT_FILEPATH = OUTPUT_DIR / "cot_output.json"
 GENERATE_OUTPUT_FILEPATH = OUTPUT_DIR / "generate_output.json"
-
-
-def save_as_json(file_path: str, data: dict) -> None:
-    """Save or merge dictionary data to a json file"""
-    # 1. Handle Path objects natively
-    file_path = Path(file_path)
-    file_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # 2. Merge with existing data if it exists
-    if file_path.exists():
-        existing_data = load_json(file_path) or {}
-        # Merge dictionaries. In Python 3.9+, you can use the | operator.
-        # It creates a new dict with updated values.
-        merged_data = existing_data | data
-    else:
-        merged_data = data
-
-    # 3. Write securely
-    with open(file_path, "w", encoding="utf-8") as f:
-        json.dump(merged_data, f, indent=2)
-
-
-def load_json(file_path: str) -> dict:
-    """Load data from a json file securely"""
-    try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return {}  # Return empty dict if file doesn't exist yet
-    except json.JSONDecodeError:
-        print(f"File {file_path} is corrupted or empty. Returning empty dict.")
-        return {}
-    except Exception as e:
-        print(f"Error reading {file_path}: {e}")
-        return {}
 
 
 def generate_docs(
@@ -106,7 +72,7 @@ if __name__ == "__main__":
         project_dir=REPO_DIR,
         output_dir=OUTPUT_DIR,
         app_instance_path="src.dispatch.main:api",
-        python_exec="/Users/phuocpham/Desktop/BachPhuoc/Year4/DoAn/SelfDocAgent/data/dispatch/venv/bin/python",
+        python_exec=REPO_DIR / "venv" / "bin" / "python",
         compose_file=REPO_DIR / ".devcontainer" / "docker-compose.yml",
         service_name="app",
         excluded_dirs=["tests", "src/dispatch/database/revisions"],
@@ -176,6 +142,8 @@ if __name__ == "__main__":
 
     #             pbar.update(len(batch))
 
-    # merge_docs_into_openapi(
-    #     GENERATE_OUTPUT_FILEPATH, OPENAPI_SPEC_PATH, RESULTED_OPENAPI_SPEC_PATH
-    # )
+    merge_docs_into_openapi(
+        GENERATE_OUTPUT_FILEPATH,
+        OPENAPI_SPEC_PATH.with_suffix(".json"),
+        RESULTED_OPENAPI_SPEC_PATH.with_suffix(".json"),
+    )

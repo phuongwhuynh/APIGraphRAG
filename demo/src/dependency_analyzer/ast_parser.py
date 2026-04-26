@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Set, Optional, Literal, Dict, Any, Tuple
 from src.tools.get_spec.get_spec import SpecGetterFactory
+from enum import Enum
 
 
 logger = logging.getLogger(__name__)
@@ -30,6 +31,12 @@ EXCLUDE_DIRS = {
     "build",
     "dist",
 }
+
+
+class DocType(Enum):
+    DOCSTRING = "docstring"
+    ENDPOINT = "endpoint"
+    SCHEMA = "schema"
 
 
 @dataclass
@@ -69,9 +76,11 @@ class CodeComponent:
     has_docstring: bool = False
     # Content of the docstring if it exists
     docstring: str = ""
+    endpoint: Dict[str, str] = field(default_factory=lambda: {})
+    schema: str = ""
 
     # Is this an endpoint
-    doc_type: List[str] = field(default_factory=lambda: ["docstring"])
+    doc_type: List[str] = field(default_factory=lambda: [DocType.DOCSTRING.value])
     api_methods: List[str] = field(default_factory=lambda: [])
 
     def to_dict(self) -> Dict[str, Any]:
@@ -89,6 +98,8 @@ class CodeComponent:
             "end_line": self.end_line,
             "has_docstring": self.has_docstring,
             "docstring": self.docstring,
+            "endpoint": self.endpoint,
+            "schema": self.schema,
             "doc_type": self.doc_type,
             "api_methods": self.api_methods,
         }
@@ -109,7 +120,9 @@ class CodeComponent:
             end_line=data.get("end_line", 0),
             has_docstring=data.get("has_docstring", False),
             docstring=data.get("docstring", ""),
-            doc_type=data.get("doc_type", ["docstring"]),
+            endpoint=data.get("endpoint", {}),
+            schema=data.get("schema", ""),
+            doc_type=data.get("doc_type", [DocType.DOCSTRING.value]),
             api_methods=data.get("api_methods", []),
         )
 
@@ -363,8 +376,13 @@ class OpenAPICollector:
             )
             if not Path(spec_getter.output_file).exists():
                 spec_getter.get_spec()
+
+            self.endpoints = spec_getter.endpoint_func_map()
         except Exception as e:
             logger.error(f"Cannot get specification skeleton by running on docker: {e}")
+            logger.info(
+                f"Try to get specification skeleton by running on local environment"
+            )
             try:
                 spec_getter = SpecGetterFactory.create(
                     framework=framework,
@@ -378,13 +396,13 @@ class OpenAPICollector:
                 )
                 if not Path(spec_getter.output_file).exists():
                     spec_getter.get_spec()
+                self.endpoints = spec_getter.endpoint_func_map()
             except Exception as e:
                 logger.error(
                     f"Cannot get specification skeleton by running on local env: {e}"
                 )
 
-        self.endpoints = spec_getter.endpoint_func_map()
-        print("Collected endpoints: ", self.endpoints)
+        # self.endpoints = spec_getter.endpoint_func_map()
         self.schemas = set()
 
     # deprecated
@@ -502,6 +520,7 @@ class OpenAPICollector:
             return False
 
         if component.id in self.schemas:
+            print("schemaschema")
             return True
 
         # The known base classes that indicate a schema
@@ -519,22 +538,27 @@ class OpenAPICollector:
             if isinstance(base, ast.Name):
                 if base.id in schema_identifiers:
                     self.schemas.add(component.id)
+                    print("schemaschema")
                     return True
 
             # 2. Catch attributed inheritance: class User(pydantic.BaseModel):
             elif isinstance(base, ast.Attribute):
                 if base.attr in schema_identifiers:
                     self.schemas.add(component.id)
+                    print("schemaschema")
                     return True
 
         return False
 
     def is_endpoint(self, component: CodeComponent) -> bool:
         """Decide if a code component is a openAPI endpoint"""
+        # for endpoint in self.endpoints:
+        #     if endpoint in component.id:
+        #         return self.endpoints[endpoint]
         if component.id in self.endpoints:
-            return True
+            return self.endpoints[component.id]
 
-        return False
+        return None
         # if framework == "django":
         #     # Assumes urls.py was parsed perfectly elsewhere
         #     return component.id in self.endpoints
@@ -645,6 +669,7 @@ class DependencyParser:
             compose_file=compose_file,
             service_name=service_name,
         )
+
         self.framework: Literal["django", "fastapi", "flask"] = framework
 
     def parse_repository(self) -> Dict[str, CodeComponent]:
@@ -654,7 +679,13 @@ class DependencyParser:
         # First pass: collect all modules and code components
         python_files = []
 
-        for root, dirs, files in os.walk(self.project_dir):
+        instance_file = (self.app_instance_path.split(":"))[0]
+        instance_file = (instance_file.split("."))[:-2]
+        main_dir = self.project_dir
+        for part in instance_file:
+            main_dir = main_dir / part
+
+        for root, dirs, files in os.walk(main_dir):
             root_path = Path(root)
 
             # Prune traversal tree in-place using OS-agnostic Path comparison
@@ -676,7 +707,7 @@ class DependencyParser:
                 python_files.append(str(file_path))
 
         for file_path in tqdm(python_files, desc="Parsing Python files", unit="file"):
-            relative_path = os.path.relpath(file_path, self.project_dir)
+            relative_path = os.path.relpath(file_path, main_dir)
             # COnvert file path to module path
             module_path = self._file_to_module_path(relative_path)
             self.modules.add(module_path)
@@ -758,13 +789,19 @@ class DependencyParser:
                     end_line=getattr(node, "end_lineno", node.lineno),
                     has_docstring=has_docstring,
                     docstring=docstring,
-                    doc_type=["docstring"],
+                    endpoint={},
+                    schema="",
+                    doc_type=[DocType.DOCSTRING.value],
                 )
-                if self.endpoints.is_endpoint(component):
-                    component.doc_type.append("endpoint")
-                    component.api_methods = self.endpoints.endpoints[component.id]
-                if self.endpoints.is_schema(component):
-                    component.doc_type.append("schema")
+
+                endpoint = self.endpoints.is_endpoint(component)
+                if endpoint:
+                    component.doc_type.append(DocType.ENDPOINT.value)
+                    component.api_methods = endpoint
+
+                schema = self.endpoints.is_schema(component)
+                if schema:
+                    component.doc_type.append(DocType.SCHEMA.value)
 
                 self.components[class_id] = component
 
@@ -792,42 +829,15 @@ class DependencyParser:
                             end_line=getattr(item, "end_lineno", item.lineno),
                             has_docstring=has_docstring,
                             docstring=docstring,
-                            doc_type=["docstring"],
+                            endpoint={},
+                            schema="",
+                            doc_type=[DocType.DOCSTRING.value],
                         )
-                        if self.endpoints.is_endpoint(method_component):
-                            print("this is an endpoint method: ", method_id)
-                            method_component.doc_type.append("endpoint")
-                            method_component.api_methods = self.endpoints.endpoints[
-                                method_id
-                            ]
-                            # Collect parameters for endpoint functions
-                            param_ids = []
-                            for arg in item.args.args:
-                                print("this is an endpoint parameter: ", arg.arg)
-                                if arg.arg in EXCLUDED_NAMES:
-                                    continue
-                                param_id = f"{method_id}.{arg.arg}"
-                                start_line = getattr(arg, "lineno", item.lineno)
-                                end_line = getattr(arg, "end_lineno", item.lineno)
-                                param_component = CodeComponent(
-                                    id=param_id,
-                                    node=arg,
-                                    component_type="parameter",
-                                    file_path=file_path,
-                                    relative_path=relative_path,
-                                    imports=set(),
-                                    from_imports={},
-                                    depends_on=set(),
-                                    source_code=self._get_source_segment(source, arg),
-                                    start_line=start_line,
-                                    end_line=end_line,
-                                    has_docstring=False,
-                                    docstring="",
-                                    doc_type=["docstring"],
-                                )
-                                self.components[param_id] = param_component
-                                param_ids.append(param_id)
-                            method_component.depends_on.update(param_ids)
+                        endpoint = self.endpoints.is_endpoint(method_component)
+                        if endpoint:
+                            method_component.doc_type.append(DocType.ENDPOINT.value)
+                            method_component.api_methods = endpoint
+
                         self.components[method_id] = method_component
 
             elif isinstance(
@@ -853,39 +863,14 @@ class DependencyParser:
                         end_line=getattr(node, "end_lineno", node.lineno),
                         has_docstring=has_docstring,
                         docstring=docstring,
-                        doc_type=["docstring"],
+                        endpoint={},
+                        schema="",
+                        doc_type=[DocType.DOCSTRING.value],
                     )
-                    if self.endpoints.is_endpoint(func_component):
-                        func_component.doc_type.append("endpoint")
-                        func_component.api_methods = self.endpoints.endpoints[func_id]
-                        param_ids = []
-                        print("this is an endpoint function: ", func_id)
-                        for arg in node.args.args:
-                            print("this is an endpoint parameter: ", arg.arg)
-                            if arg.arg in EXCLUDED_NAMES:
-                                continue
-                            param_id = f"{func_id}.{arg.arg}"
-                            start_line = getattr(arg, "lineno", node.lineno)
-                            end_line = getattr(arg, "end_lineno", node.lineno)
-                            param_component = CodeComponent(
-                                id=param_id,
-                                node=arg,
-                                component_type="parameter",
-                                file_path=file_path,
-                                relative_path=relative_path,
-                                imports=set(),
-                                from_imports={},
-                                depends_on=set(),
-                                source_code=self._get_source_segment(source, arg),
-                                start_line=start_line,
-                                end_line=end_line,
-                                has_docstring=False,
-                                docstring="",
-                                doc_type=["docstring"],
-                            )
-                            self.components[param_id] = param_component
-                            param_ids.append(param_id)
-                        func_component.depends_on.update(param_ids)
+                    endpoint = self.endpoints.is_endpoint(func_component)
+                    if endpoint:
+                        func_component.doc_type.append(DocType.ENDPOINT.value)
+                        func_component.api_methods = endpoint
 
                     self.components[func_id] = func_component
 
@@ -1019,21 +1004,6 @@ class DependencyParser:
         storage_conn.save(serializable_components)
 
         logger.info(f"Save dependency graph to {storage_conn.db_path}")
-
-        # save to a local json file for debugging
-        try:
-            out_path = (
-                Path(self.output_dir)
-                if not isinstance(self.output_dir, Path)
-                else self.output_dir
-            )
-            out_path.mkdir(parents=True, exist_ok=True)
-            json_file = out_path / "dependency_graph.json"
-            with open(json_file, "w", encoding="utf-8") as jf:
-                json.dump(serializable_components, jf, indent=2, ensure_ascii=False)
-            logger.info(f"Wrote dependency graph JSON to {json_file}")
-        except Exception as e:
-            logger.warning(f"Failed to write dependency graph JSON: {e}")
 
     def load_dependency_graph(self, input_path: str) -> None:
         """Load the dependency graph from a JSON file"""

@@ -513,7 +513,7 @@ class DjangoLocalGetter(LocalBaseGetter):
         if self.run_local_extractor(script) and map_file.exists():
             with open(map_file, "r", encoding="utf-8") as f:
                 return self._process_map(json.load(f))
-        return {}
+        raise SpecGetterException("Failed to extract endpoint-function mapping for Django local getter.")
 
 
 class FastAPILocalGetter(LocalBaseGetter):
@@ -528,7 +528,7 @@ class FastAPILocalGetter(LocalBaseGetter):
         if self.run_local_extractor(script) and map_file.exists():
             with open(map_file, "r", encoding="utf-8") as f:
                 return self._process_map(json.load(f))
-        return {}
+        raise SpecGetterException("Failed to extract endpoint-function mapping for FastAPI local getter.")
 
 
 class FlaskLocalGetter(LocalBaseGetter):
@@ -541,7 +541,7 @@ class FlaskLocalGetter(LocalBaseGetter):
         if self.run_local_extractor(script) and map_file.exists():
             with open(map_file, "r", encoding="utf-8") as f:
                 return self._process_map(json.load(f))
-        return {}
+        raise SpecGetterException("Failed to extract endpoint-function mapping for Flask local getter.")
 
 
 # =========================================================================================
@@ -683,7 +683,7 @@ class DjangoDockerGetter(DockerBaseGetter):
 
     def endpoint_func_map(self) -> dict:
         if not self.compose_file.exists():
-            return {}
+            raise SpecGetterException("Failed to extract endpoint-function mapping from Docker container.")
 
         map_file = self.output_file.with_name(f"{self.output_file.stem}_map.json")
         extractor_code = self._build_django_map_script("/tmp/map_dump.json")
@@ -714,7 +714,7 @@ class DjangoDockerGetter(DockerBaseGetter):
             )
             return self._copy_map_from_container(map_file)
         except subprocess.CalledProcessError:
-            return {}
+            raise SpecGetterException("Failed to extract endpoint-function mapping from Docker container.")
         finally:
             subprocess.run(
                 ["docker", "compose", "-f", str(self.compose_file), "down", "-v"],
@@ -780,7 +780,7 @@ class FastAPIDockerGetter(DockerBaseGetter):
             )
             return self._copy_map_from_container(map_file)
         except subprocess.CalledProcessError:
-            return {}
+            raise SpecGetterException("Failed to extract endpoint-function mapping from Docker container.")
         finally:
             subprocess.run(
                 ["docker", "compose", "-f", str(self.compose_file), "down", "-v"],
@@ -853,7 +853,7 @@ class FlaskDockerGetter(DockerBaseGetter):
             )
             return self._copy_map_from_container(map_file)
         except subprocess.CalledProcessError:
-            return {}
+            raise SpecGetterException("Failed to extract endpoint-function mapping from Docker container.")
         finally:
             subprocess.run(
                 ["docker", "compose", "-f", str(self.compose_file), "down", "-v"],

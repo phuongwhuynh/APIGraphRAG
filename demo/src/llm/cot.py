@@ -1,6 +1,6 @@
 from src.llm.base import BasicModel
 from src.llm.prompt import COT_SYSTEM_PROMPT, COT_INSTRUCT
-from src.dependency_analyzer.ast_parser import CodeComponent
+from src.dependency_analyzer.ast_parser import CodeComponent, DocType
 from langgraph.types import Send
 from langchain.messages import HumanMessage, SystemMessage, AnyMessage
 from langgraph.graph import StateGraph, START, END
@@ -54,6 +54,8 @@ class CoT(BasicModel):
         ###############################################
         # if len(state["code_component"].depends_on) <= 1:
         #     return {"worker_thoughts": [(state["code_component"].id, ["", ""])]}
+        if len(state["code_component"].doc_type) <= 1:
+            return {"worker_thoughts": [(state["code_component"].id, ["", ""])]}
 
 
         source_code = state["code_component"].source_code

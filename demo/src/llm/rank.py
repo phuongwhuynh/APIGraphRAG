@@ -3,11 +3,10 @@ import re
 from src.llm.base import BasicModel
 from typing import List, Dict, TypedDict, Annotated, Tuple, Literal
 from pydantic import BaseModel, Field
-from langchain.chat_models import init_chat_model
 from langchain.messages import HumanMessage, SystemMessage, AnyMessage
 from langgraph.graph import StateGraph, START, END
 from langgraph.types import Send
-from src.dependency_analyzer.ast_parser import CodeComponent
+from src.dependency_analyzer.ast_parser import CodeComponent, DocType
 from src.llm.prompt import COT_SYSTEM_PROMPT, RANK_INSTRUCT
 from src.tools.rank import sliding_window
 from math import ceil
@@ -138,7 +137,7 @@ class Ranker(BasicModel):
         result = self.base_llm.invoke([system_prompt, instruction])
 
         # Prompt 2 Information
-        self.messages_logger.info(f"System message: {COT_SYSTEM_PROMPT.content}\n\n Instruction 2: {instruction.content}\n\n result: {result.content}\n\n Token usage: {result.usage_metadata}")
+        self.messages_logger.info(f"System message: {system_prompt.content}\n\n Instruction 2: {instruction.content}\n\n result: {result.content}\n\n Token usage: {result.usage_metadata}")
         self.tokens_logger.info(f"Token usage: {result.usage_metadata}")
 
         logprobs_content = result.response_metadata.get("logprobs", {}).get("content", [])
@@ -174,6 +173,9 @@ class Ranker(BasicModel):
         id = state["code_component"].id
         context= list(state["code_component"].depends_on)
         instruct, chain_of_thought = state["cot"]
+
+        if len(state["code_component"].doc_type) <= 1:
+            return {"worker_rank": [( state["code_component"].id, context )]}
 
         if len(context) <= 1:
             return {"worker_rank": [( state["code_component"].id, context )]}
