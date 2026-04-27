@@ -1,0 +1,9 @@
+Excluded directories:  {PosixPath('/Users/phuocpham/Desktop/BachPhuoc/Year4/DoAn/DoAn/data/dispatch/src/dispatch/database/revisions'), PosixPath('/Users/phuocpham/Desktop/BachPhuoc/Year4/DoAn/DoAn/data/dispatch/tests')}
+schemaschema
+schemaschema
+schemaschema
+schemaschema
+schemaschema
+schemaschema
+schemaschema
+schemaschema
