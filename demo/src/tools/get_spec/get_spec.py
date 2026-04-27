@@ -513,7 +513,9 @@ class DjangoLocalGetter(LocalBaseGetter):
         if self.run_local_extractor(script) and map_file.exists():
             with open(map_file, "r", encoding="utf-8") as f:
                 return self._process_map(json.load(f))
-        raise SpecGetterException("Failed to extract endpoint-function mapping for Django local getter.")
+        raise SpecGetterException(
+            "Failed to extract endpoint-function mapping for Django local getter."
+        )
 
 
 class FastAPILocalGetter(LocalBaseGetter):
@@ -527,8 +529,46 @@ class FastAPILocalGetter(LocalBaseGetter):
         script = self._build_fastapi_map_script(str(map_file))
         if self.run_local_extractor(script) and map_file.exists():
             with open(map_file, "r", encoding="utf-8") as f:
-                return self._process_map(json.load(f))
-        raise SpecGetterException("Failed to extract endpoint-function mapping for FastAPI local getter.")
+                handler_map = self._process_map(json.load(f))
+            # Load OpenAPI spec
+            with open(self.output_file, "r", encoding="utf-8") as f:
+                spec = json.load(f)
+            # Build endpoint -> (path_params, query_params)
+            endpoint_param_map = {}
+            for path, methods in spec.get("paths", {}).items():
+                for method, details in methods.items():
+                    if not isinstance(details, dict):
+                        continue
+                    ep_key = f"{method.lower()}:{path}"
+                    path_params = []
+                    query_params = []
+                    for param in details.get("parameters", []):
+                        if param.get("in") == "path":
+                            path_params.append(param.get("name"))
+                        elif param.get("in") == "query":
+                            query_params.append(param.get("name"))
+                    endpoint_param_map[ep_key] = {
+                        "path_params": path_params,
+                        "query_params": query_params,
+                    }
+            # Build expanded handler map
+            expanded = {}
+            for handler, eps in handler_map.items():
+                all_path_params = set()
+                all_query_params = set()
+                for ep in eps:
+                    params = endpoint_param_map.get(ep, {})
+                    all_path_params.update(params.get("path_params", []))
+                    all_query_params.update(params.get("query_params", []))
+                expanded[handler] = {
+                    "endpoints": eps,
+                    "path_params": list(all_path_params),
+                    "query_params": list(all_query_params),
+                }
+            return expanded
+        raise SpecGetterException(
+            "Failed to extract endpoint-function mapping for FastAPI local getter."
+        )
 
 
 class FlaskLocalGetter(LocalBaseGetter):
@@ -541,7 +581,9 @@ class FlaskLocalGetter(LocalBaseGetter):
         if self.run_local_extractor(script) and map_file.exists():
             with open(map_file, "r", encoding="utf-8") as f:
                 return self._process_map(json.load(f))
-        raise SpecGetterException("Failed to extract endpoint-function mapping for Flask local getter.")
+        raise SpecGetterException(
+            "Failed to extract endpoint-function mapping for Flask local getter."
+        )
 
 
 # =========================================================================================
@@ -683,7 +725,9 @@ class DjangoDockerGetter(DockerBaseGetter):
 
     def endpoint_func_map(self) -> dict:
         if not self.compose_file.exists():
-            raise SpecGetterException("Failed to extract endpoint-function mapping from Docker container.")
+            raise SpecGetterException(
+                "Failed to extract endpoint-function mapping from Docker container."
+            )
 
         map_file = self.output_file.with_name(f"{self.output_file.stem}_map.json")
         extractor_code = self._build_django_map_script("/tmp/map_dump.json")
@@ -714,7 +758,9 @@ class DjangoDockerGetter(DockerBaseGetter):
             )
             return self._copy_map_from_container(map_file)
         except subprocess.CalledProcessError:
-            raise SpecGetterException("Failed to extract endpoint-function mapping from Docker container.")
+            raise SpecGetterException(
+                "Failed to extract endpoint-function mapping from Docker container."
+            )
         finally:
             subprocess.run(
                 ["docker", "compose", "-f", str(self.compose_file), "down", "-v"],
@@ -778,9 +824,47 @@ class FastAPIDockerGetter(DockerBaseGetter):
                 check=True,
                 capture_output=True,
             )
-            return self._copy_map_from_container(map_file)
+            handler_map = self._copy_map_from_container(map_file)
+            # Load OpenAPI spec
+            with open(self.output_file, "r", encoding="utf-8") as f:
+                spec = json.load(f)
+            # Build endpoint -> (path_params, query_params)
+            endpoint_param_map = {}
+            for path, methods in spec.get("paths", {}).items():
+                for method, details in methods.items():
+                    if not isinstance(details, dict):
+                        continue
+                    ep_key = f"{method.lower()}:{path}"
+                    path_params = []
+                    query_params = []
+                    for param in details.get("parameters", []):
+                        if param.get("in") == "path":
+                            path_params.append(param.get("name"))
+                        elif param.get("in") == "query":
+                            query_params.append(param.get("name"))
+                    endpoint_param_map[ep_key] = {
+                        "path_params": path_params,
+                        "query_params": query_params,
+                    }
+            # Build expanded handler map
+            expanded = {}
+            for handler, eps in handler_map.items():
+                all_path_params = set()
+                all_query_params = set()
+                for ep in eps:
+                    params = endpoint_param_map.get(ep, {})
+                    all_path_params.update(params.get("path_params", []))
+                    all_query_params.update(params.get("query_params", []))
+                expanded[handler] = {
+                    "endpoints": eps,
+                    "path_params": list(all_path_params),
+                    "query_params": list(all_query_params),
+                }
+            return expanded
         except subprocess.CalledProcessError:
-            raise SpecGetterException("Failed to extract endpoint-function mapping from Docker container.")
+            raise SpecGetterException(
+                "Failed to extract endpoint-function mapping from Docker container."
+            )
         finally:
             subprocess.run(
                 ["docker", "compose", "-f", str(self.compose_file), "down", "-v"],
@@ -853,7 +937,9 @@ class FlaskDockerGetter(DockerBaseGetter):
             )
             return self._copy_map_from_container(map_file)
         except subprocess.CalledProcessError:
-            raise SpecGetterException("Failed to extract endpoint-function mapping from Docker container.")
+            raise SpecGetterException(
+                "Failed to extract endpoint-function mapping from Docker container."
+            )
         finally:
             subprocess.run(
                 ["docker", "compose", "-f", str(self.compose_file), "down", "-v"],

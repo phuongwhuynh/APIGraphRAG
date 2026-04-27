@@ -28,6 +28,7 @@ RESULTED_OPENAPI_SPEC_PATH = OUTPUT_DIR / ("resulted_" + REPO_DIR.name)
 RANK_OUTPUT_FILEPATH = OUTPUT_DIR / "rank_output.json"
 COT_OUTPUT_FILEPATH = OUTPUT_DIR / "cot_output.json"
 GENERATE_OUTPUT_FILEPATH = OUTPUT_DIR / "generate_output.json"
+TRACES_OUTPUT_FILEPATH = OUTPUT_DIR / "traces_output.json"
 
 
 def generate_docs(
@@ -46,9 +47,15 @@ def generate_docs(
     # chain_of_thoughts = load_json(COT_OUTPUT_FILEPATH)
     # ranks = load_json(RANK_OUTPUT_FILEPATH)
 
-    docs = generate.invoke(components=components, cots=chain_of_thoughts, ranks=ranks)
+    result = generate.invoke(
+        components=components,
+        #  cots=chain_of_thoughts,
+        ranks=ranks,
+    )
+    docs = result["workflow_docs"]
+    traces = result["workflow_traces"]
     save_as_json(file_path=GENERATE_OUTPUT_FILEPATH, data=docs)
-
+    save_as_json(file_path=TRACES_OUTPUT_FILEPATH, data=traces)
     return
 
 
@@ -59,11 +66,11 @@ if __name__ == "__main__":
     db_storage = Storage("dependency_graph.db")
     db_storage._init_db()
 
-    rank_model = "llama3.2:1b"
+    rank_model = "llama3.2:3b"
     rank_model_provider = "openai"
-    cot_model = "llama3.2:1b"
+    cot_model = "llama3.2:3b"
     cot_model_provider = "ollama"
-    generate_model = "llama3.2:1b"
+    generate_model = "llama3.2:3b"
     generate_model_provider = "ollama"
 
     # Build dependency graph
@@ -129,18 +136,18 @@ if __name__ == "__main__":
     # Traverse according to the order and generate the docs
     total_files = sum(len(group) for group in topo_order)
 
-    # with tqdm(total=total_files, desc="Generating document") as pbar:
-    #     for group in topo_order:
+    with tqdm(total=total_files, desc="Generating document") as pbar:
+        for group in topo_order:
 
-    #         # Process components in batches of max 5
-    #         for i in range(0, len(group), 5):
-    #             batch = group[i : i + 5]
-    #             batch = db_storage.get_batch(batch)
-    #             # print("The components number in batch: ", len(batch), type(batch[0]))
+            # Process components in batches of max 5
+            for i in range(0, len(group), 5):
+                batch = group[i : i + 5]
+                batch = db_storage.get_batch(batch)
+                # print("The components number in batch: ", len(batch), type(batch[0]))
 
-    #             generate_docs(components=batch, cot=cot, rank=rank, generate=generate)
+                generate_docs(components=batch, cot=cot, rank=rank, generate=generate)
 
-    #             pbar.update(len(batch))
+                pbar.update(len(batch))
 
     # merge_docs_into_openapi(
     #     GENERATE_OUTPUT_FILEPATH,
