@@ -44,15 +44,26 @@ Your output is:
 """
 
 GENERATE_SYSTEM_PROMPT = """
-You are a code documentation generator.
+<Role Description>
+You are an Expert Technical Writer and Senior Software Architect. Your primary mission is to craft exceptional, highly readable documentation that explains the functionality, context, and purpose of provided code components.
+</Role Description>
 
-GLOBAL RULES:
+<GLOBAL RULES>
 - Never include reasoning or explanations of your thinking.
 - Never infer information not explicitly present in the input.
 - Never add extra sections beyond what is requested.
 - Never use markdown, bullet points, or structured formatting unless explicitly requested.
+</GLOBAL RULES>
 
-Output must be minimal, direct, and strictly based on provided input.
+
+<Directives>
+1. Core Mission: Your documentation MUST cover four critical pillars: 
+   - Motivation (The business/architectural 'why')
+   - Functionality (The core logic and side effects)
+2. Context Integration: Use the provided external context to enrich your explanation. Seamlessly weave knowledge of external functions or classes into your description so the reader understands the full picture.
+3. Output Scope: Generate ONLY the descriptive text requested. Do not generate structural boilerplate (like JSON/YAML schemas) unless explicitly asked.
+4. Professional Tone: Write objectively and concisely. Avoid generic filler (e.g., "This function is used to..."). Focus on high-density, valuable information for the end developer.
+</Directives>
 """
 
 GENERATE_DOCSTRING_PROMPT = """
@@ -60,30 +71,18 @@ GENERATE_DOCSTRING_PROMPT = """
 {supporting_context}
 </Supporting Context>
 
-Task: Write a Python docstring for the given code.
+Task: Write a comprehensive Python docstring for the given code. 
 
-STRICT RULES:
-- Use ONLY information explicitly present in the code or supporting context.
-- Supporting context is evidence only. It must NOT be interpreted or expanded.
-- Do NOT infer business logic, architecture, lifecycle, or hidden behavior.
-- Do NOT add explanations of reasoning or analysis.
-- Do NOT introduce new concepts not directly stated.
+To achieve the highest quality, your docstring MUST include:
+1. Summary & Purpose: A concise summary of what it does, followed by the architectural or business problem it solves.
+2. Functionality: A clear explanation of the core logic and data transformations.
+3. Parameters & Returns: Detailed descriptions of constraints, default behaviors, and execution impacts (do not just repeat the type hints).
 
-ALLOWED CONTENT:
-- brief summary of visible purpose
-- direct description of visible behavior
-
-FORBIDDEN:
-- lifecycle explanations
-- business interpretation
-- examples unless explicitly present
-- “designed to”, “typically”, “implies”
-
-OUTPUT:
-Return ONLY a Python docstring. No extra text.
+Ensure the docstring follows standard formatting (e.g., Google or Sphinx style).
 """
 
 GENERATE_ENDPOINT_PROMPT = """
+
 <Supporting Context>
 {supporting_context}
 </Supporting Context>
@@ -93,20 +92,13 @@ Method: {method}
 Path: {path}
 </Endpoint Metadata>
 
-Task: Write the OpenAPI endpoint description.
+Task: Write the descriptive prose for this OpenAPI spec endpoint.
 
-STRICT RULES:
-- Use ONLY explicit information from metadata and supporting context.
-- Supporting context is factual reference only, not interpretation material.
-- Do NOT infer side effects unless explicitly stated.
-- Do NOT describe business strategy or system design.
+To achieve the highest quality, your description MUST include:
+1. Purpose: The strategic business value and overarching goal of this endpoint for the API consumer.
+2. Functionality & Side Effects: The primary action performed, PLUS any secondary system state changes (e.g., cascading deletes, async jobs queued, webhooks fired).
 
-Include only:
-- direct function of endpoint
-- explicitly stated effects
-
-OUTPUT:
-Single paragraph plain text only.
+Output ONLY the descriptive text in normal format (not including markdowns,...) that belongs in the `description` field. 
 """
 
 GENERATE_SCHEMA_PROMPT = """
@@ -114,23 +106,18 @@ GENERATE_SCHEMA_PROMPT = """
 {supporting_context}
 </Supporting Context>
 
-Task: Write schema description text for: {schema_name}
+Task: Write the descriptive text and field-level documentation for an OpenAPI Schema component.
+Schema Name: {schema_name}
 
-STRICT RULES:
-- Use ONLY explicitly stated information from schema or context.
-- Do NOT infer meaning of fields.
-- Do NOT add lifecycle, behavior, or business interpretation.
-- Do NOT expand field semantics beyond names and explicit descriptions.
+To achieve the highest quality and provide maximum value to the API consumer, your documentation MUST adhere to the following directives:
 
-Supporting context is:
-- reference only
-- NOT a source for inference
+1. Object Purpose & Role: Explain what this data object represents in the business domain and its core purpose within the broader system.
+2. Lifecycle & State: If applicable, describe how this object changes over time (e.g., is it immutable after creation? Does it have strict state transitions like PENDING -> COMPLETED?).
+3. Field Business Context: Explain the 'why' behind specific fields. Detail any complex cross-parameter dependencies (e.g., "Field A is required only if Field B is true"). 
+4. Avoid Redundancy: DO NOT merely repeat basic JSON schema types or constraints (like "This is a string" or "Max length is 10"). Focus on human-readable business context.
+5. Metadata Preservation: If the provided code already contains descriptions, comments, or examples for specific fields, you MUST preserve them. Use the <Supporting Context> to enrich them only if they lack business clarity.
 
-Allowed:
-- neutral description of object if explicitly stated
-
-OUTPUT:
-Plain text only.
+Output ONLY the descriptive text in normal format (not including markdowns,...) that belongs in the `description` fields of the schema and its underlying properties.
 """
 
 GENERATE_PARAMETER_PROMPT = """
@@ -175,7 +162,7 @@ EVALUATE_PROMPT = """
 {document}
 </Document>
 
-Based on the criteria provided in the system instructions, rate the document from 1 to 5.
+Based on the criteria provided in the system instructions, rate the document for {component_type} from 1 to 5.
 Score:
 """
 

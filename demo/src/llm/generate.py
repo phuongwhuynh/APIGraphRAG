@@ -166,7 +166,13 @@ class Generator(BasicModel):
                 "worker_docs": [
                     (
                         state["component"].id,
-                        {"docstring": "", "endpoint": {}, "schema": ""},
+                        {
+                            "docstring": "",
+                            "endpoint": {},
+                            "schema": "",
+                            "path_parameter": {},
+                            "query_parameter": {},
+                        },
                         trace,
                     )
                 ]
