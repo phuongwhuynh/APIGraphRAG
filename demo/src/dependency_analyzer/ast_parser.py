@@ -316,6 +316,8 @@ class OpenAPICollector:
         python_exec: Optional[str] = None,
         compose_file: Optional[str] = None,
         service_name: Optional[str] = None,
+        module_path_separator: Optional[str] = "__",
+        variant_separator: Optional[str] = "-",
     ):
         """Initialize OpenAPI component collector.
 
@@ -338,6 +340,8 @@ class OpenAPICollector:
                 python_exec=python_exec,
                 compose_file=compose_file,
                 service_name=service_name,
+                module_path_separator=module_path_separator,
+                variant_separator=variant_separator,
             )
             if not Path(spec_getter.output_file).exists():
                 spec_getter.get_spec()
@@ -355,6 +359,8 @@ class OpenAPICollector:
                     python_exec=python_exec,
                     compose_file=compose_file,
                     service_name=service_name,
+                    module_path_separator=module_path_separator,
+                    variant_separator=variant_separator,
                 )
                 if not Path(spec_getter.output_file).exists():
                     spec_getter.get_spec()
@@ -362,30 +368,18 @@ class OpenAPICollector:
             except Exception as e:
                 logger.error(f"Cannot get specification via local env: {e}")
 
-        self.schemas: Set[str] = set()
+        # self.schemas: Set[str] = set()
+        self.schemas = spec_getter.schemas()
 
     def is_schema(self, component: "CodeComponent") -> bool:
         """Determine if a component represents an API schema/model."""
         node = component.node
         if not isinstance(node, ast.ClassDef):
             return False
-        if component.id in self.schemas:
+
+        class_name = component.id.split(".")[-1]
+        if component.id in self.schemas or class_name in self.schemas:
             return True
-
-        schema_identifiers = {
-            "BaseModel",  # Pydantic (FastAPI)
-            "Serializer",  # DRF (Django)
-            "ModelSerializer",  # DRF (Django)
-            "Schema",  # Marshmallow (Flask)
-        }
-
-        for base in node.bases:
-            if isinstance(base, ast.Name) and base.id in schema_identifiers:
-                self.schemas.add(component.id)
-                return True
-            elif isinstance(base, ast.Attribute) and base.attr in schema_identifiers:
-                self.schemas.add(component.id)
-                return True
 
         return False
 
@@ -408,6 +402,8 @@ class DependencyParser:
         service_name: Optional[str] = "app",
         excluded_dirs: Optional[List] = [],
         excluded_files: Optional[List] = [],
+        module_path_separator: Optional[str] = "__",
+        variant_separator: Optional[str] = "-",
     ):
         """Initialize a dependency parser for a Python repository.
 
@@ -449,6 +445,8 @@ class DependencyParser:
             python_exec=python_exec,
             compose_file=compose_file,
             service_name=service_name,
+            module_path_separator=module_path_separator,
+            variant_separator=variant_separator,
         )
 
     # -------------------------------------------------------------------------

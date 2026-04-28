@@ -3,7 +3,8 @@ import subprocess
 import time
 import json
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Literal, Optional, Set
+from src.tools.json.json import load_json
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,8 @@ class SpecGetterFactory:
         # Docker specific
         compose_file: Optional[str] = "docker-compose.yml",
         service_name: str = "app",
+        module_path_separator: Optional[str] = "__",
+        variant_separator: Optional[str] = "-",
     ):
 
         if mode == "local":
@@ -42,7 +45,7 @@ class SpecGetterFactory:
             getter_class = getters.get(framework)
             if not getter_class:
                 raise ValueError(f"Unsupported framework: {framework} for local mode.")
-            return getter_class(project_dir, output_dir, app_instance_path, python_exec)
+            return getter_class(project_dir, output_dir, app_instance_path, python_exec, module_path_separator, variant_separator)
 
         elif mode == "docker":
             getters = {
@@ -54,7 +57,7 @@ class SpecGetterFactory:
             if not getter_class:
                 raise ValueError(f"Unsupported framework: {framework} for docker mode.")
             return getter_class(
-                project_dir, output_dir, app_instance_path, compose_file, service_name
+                project_dir, output_dir, app_instance_path, compose_file, service_name, module_path_separator, variant_separator
             )
 
         else:
@@ -70,7 +73,12 @@ class BaseSpecGetter:
     file_extension = ".json"
 
     def __init__(
-        self, project_dir: str, output_dir: str, app_instance_path: Optional[str]
+        self,
+        project_dir: str,
+        output_dir: str,
+        app_instance_path: Optional[str],
+        module_path_separator: Optional[str] = "__",
+        variant_separator: Optional[str] = "-",
     ):
         self.project_dir = Path(project_dir).resolve()
         self.app_instance_path = app_instance_path
@@ -80,6 +88,8 @@ class BaseSpecGetter:
         self.output_file = (output_path / self.project_dir.name).with_suffix(
             self.file_extension
         )
+        self.module_path_seperator = module_path_separator
+        self.variant_seperator = variant_separator
 
     def load(self):
         """
@@ -145,6 +155,23 @@ class BaseSpecGetter:
     def endpoints(self) -> list:
         """Returns a list of all API endpoints."""
         return list(self.load())
+
+    def schemas(self) -> set:
+        data = load_json(self.output_file)
+
+        schemas = data.get("components", {}).get("schemas", {})
+
+        returned_schema = set()
+
+        for schema_name in schemas.keys():
+            schema_name = schema_name.split(self.variant_seperator)[0]
+            splitted_name = schema_name.split(self.module_path_seperator)
+            if len(splitted_name) <= 1:
+                returned_schema.add(schema_name)
+            else:
+                returned_schema.add(".".join(splitted_name))
+
+        return returned_schema
 
     def _process_map(self, raw_map: dict) -> dict:
         """
@@ -461,8 +488,10 @@ class LocalBaseGetter(BaseSpecGetter):
         output_dir: str,
         app_instance_path: Optional[str],
         python_exec: str,
+        module_path_separator: Optional[str] = "__",
+        variant_separator: Optional[str] = "-",
     ):
-        super().__init__(project_dir, output_dir, app_instance_path)
+        super().__init__(project_dir, output_dir, app_instance_path, module_path_separator, variant_separator)
         self.python_exec = str(Path(python_exec))
 
     def run_local_extractor(self, extractor_code: str) -> bool:
@@ -599,8 +628,10 @@ class DockerBaseGetter(BaseSpecGetter):
         app_instance_path: Optional[str],
         compose_file: str,
         service_name: str,
+        module_path_separator: Optional[str] = "__",
+        variant_separator: Optional[str] = "-",
     ):
-        super().__init__(project_dir, output_dir, app_instance_path)
+        super().__init__(project_dir, output_dir, app_instance_path, module_path_separator, variant_separator)
         self.service_name = service_name
 
         compose_path = Path(compose_file)
