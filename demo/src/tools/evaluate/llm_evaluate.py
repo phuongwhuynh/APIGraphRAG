@@ -43,6 +43,7 @@ class State(TypedDict):
 class WorkerState(TypedDict):
     component_id: str
     source_code: str
+    component_type: str
     document: str | Dict[str, str]
     criteria: str
     results: Annotated[List[Tuple[str, float]], operator.add]
@@ -99,7 +100,6 @@ class LLMEvaluator(BasicModel):
             "api_evaluation": self.docstring_result,
             "docstring_evaluation": self.api_result}
 
-    
 
     def _save_results(self):
         if self.api_result:

@@ -5,13 +5,16 @@ from .ast_parser import CodeComponent
 
 logger = logging.getLogger(__name__)
 
-def resolve_cycles(graph: Dict[str, List[str]]) -> Tuple[Dict[str, List[str]], List[Tuple[str, str]]]:
+
+def resolve_cycles(
+    graph: Dict[str, List[str]],
+) -> Tuple[Dict[str, List[str]], List[Tuple[str, str]]]:
     """
     Removes back-edges to break cycles in a directed graph.
 
     Args:
         graph: the dependency graph
-    
+
     Returns:
         acyclic_graph: The resolved graph with cycles broken.
         removed_edges: A list of the (source, target) edges that were deleted.
@@ -19,7 +22,7 @@ def resolve_cycles(graph: Dict[str, List[str]]) -> Tuple[Dict[str, List[str]], L
     visited = set()
     recursion_stack = set()
     removed_edges = []
-    
+
     # Initialize the new graph safely (ensuring all nodes are keys)
     acyclic_graph = {node: [] for node in graph}
     for edges in graph.values():
@@ -53,20 +56,21 @@ def resolve_cycles(graph: Dict[str, List[str]]) -> Tuple[Dict[str, List[str]], L
 
     return acyclic_graph, removed_edges
 
+
 def topo_sort(graph: Dict[str, List[str]]) -> List[str]:
-    """ Define a topological order over the acyclic graph
+    """Define a topological order over the acyclic graph
 
-        Args:
-            graph: an acyclic dependency graph
+    Args:
+        graph: an acyclic dependency graph
 
-        Return:
-            an topologically ordered list of node. This toppological order allows for parrallel processing of nodes in the same group
+    Return:
+        an topologically ordered list of node. This toppological order allows for parrallel processing of nodes in the same group
     """
 
     acyclic_graph, removed_edges = resolve_cycles(graph)
 
     out_degrees = {node: len(acyclic_graph[node]) for node in acyclic_graph}
-    
+
     queue = deque([node for node in out_degrees if out_degrees[node] == 0])
     next_queue = deque([])
 
@@ -76,14 +80,13 @@ def topo_sort(graph: Dict[str, List[str]]) -> List[str]:
 
     while queue:
         node = queue.popleft()
-        
 
         for dependent, deps in acyclic_graph.items():
             if node in deps:
                 out_degrees[dependent] -= 1
                 if out_degrees[dependent] == 0:
                     next_queue.append(dependent)
-        
+
         if not queue:
             # If the current parrallel group is finished processing, move to the next group
             queue = next_queue
@@ -93,21 +96,23 @@ def topo_sort(graph: Dict[str, List[str]]) -> List[str]:
                 counter += 1
 
     if sum(len(group) for group in result) != len(acyclic_graph):
-        logger.warning("Topological sort failed: graph has cycles that weren't resolved")
+        logger.warning(
+            "Topological sort failed: graph has cycles that weren't resolved"
+        )
         # Return all nodes in some order to avoid breaking the process
         print(result)
         print(sum(len(group) for group in result), len(acyclic_graph))
         return list(acyclic_graph.keys())
-    
+
     # Reverse the result to get dependencies first
     return result
+
 
 def graph_from_components(components: List[CodeComponent]) -> Dict[str, List[str]]:
     graph = {}
     for id, component in components.items():
         graph[id] = component
     return graph
-
 
 
 # # Graph with cycles: A->B->C->A and C->D->C

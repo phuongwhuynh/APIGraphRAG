@@ -13,22 +13,32 @@ class State(TypedDict):
     workflow_thoughts: Dict[str, List[str]]
     worker_thoughts: Annotated[List[Tuple[str, List[str]]], operator.add]
 
+
 class WorkerState(TypedDict):
     code_component: CodeComponent
     worker_thoughts: Annotated[List[Tuple[str, List[str]]], operator.add]
 
+
 class CoT(BasicModel):
-    def __init__(self, model: str, model_provider: str, input_context_window: int, output_context_window: int, output_dir: str, **kwarg):
+    def __init__(
+        self,
+        model: str,
+        model_provider: str,
+        input_context_window: int,
+        output_context_window: int,
+        output_dir: str,
+        **kwarg,
+    ):
         """Initiate a reading workflow"""
 
         super().__init__(
-            agent_name= "cot",
-            model= model,
-            model_provider= model_provider,
-            input_context_window= input_context_window,
-            output_context_window= output_context_window,
-            output_dir = output_dir,
-            **kwarg
+            agent_name="cot",
+            model=model,
+            model_provider=model_provider,
+            input_context_window=input_context_window,
+            output_context_window=output_context_window,
+            output_dir=output_dir,
+            **kwarg,
         )
 
         # Workflow compile
@@ -46,7 +56,7 @@ class CoT(BasicModel):
     def invoke(self, components: CodeComponent):
         result = self.cot.invoke({"code_components": components})
         return result["workflow_thoughts"]
-    
+
     # Workflow nodes
     def _llm_call(self, state: WorkerState):
         """cot generate analysis about a code"""
@@ -57,24 +67,34 @@ class CoT(BasicModel):
         if len(state["code_component"].doc_type) <= 1:
             return {"worker_thoughts": [(state["code_component"].id, ["", ""])]}
 
-
         source_code = state["code_component"].source_code
-        
+
         system_prompt = SystemMessage(COT_SYSTEM_PROMPT)
         instruct = HumanMessage(COT_INSTRUCT.format(code_component=""))
 
         # Truncate the source code to fit with the context window
-        truncated_source_code = self.context_window_fit(contexts= source_code, messages=[system_prompt, instruct], structured_output=None)
+        truncated_source_code = self.context_window_fit(
+            contexts=source_code,
+            messages=[system_prompt, instruct],
+            structured_output=None,
+        )
 
-        instruct = HumanMessage(COT_INSTRUCT.format(code_component=truncated_source_code))
+        instruct = HumanMessage(
+            COT_INSTRUCT.format(code_component=truncated_source_code)
+        )
         result = self.base_llm.invoke([system_prompt, instruct])
 
         # Log prompting information
-        self.messages_logger.info(f"System message: {system_prompt.content}\n\n Instruction: {instruct.content}\n\n result: {result.content}\n\n Token usage: {result.usage_metadata}")
+        self.messages_logger.info(
+            f"System message: {system_prompt.content}\n\n Instruction: {instruct.content}\n\n result: {result.content}\n\n Token usage: {result.usage_metadata}"
+        )
         self.tokens_logger.info(f"Token usage: {result.usage_metadata}")
-        
 
-        return {"worker_thoughts": [(state["code_component"].id, [instruct.content, result.content])]}
+        return {
+            "worker_thoughts": [
+                (state["code_component"].id, [instruct.content, result.content])
+            ]
+        }
 
     # Workflow nodes
     def _assign_worker(self, state: State):
@@ -83,7 +103,7 @@ class CoT(BasicModel):
         sends = []
 
         for code_component in state["code_components"]:
-            sends.append(Send('llm_call', {"code_component": code_component}))
+            sends.append(Send("llm_call", {"code_component": code_component}))
 
         return sends
 

@@ -1,34 +1,51 @@
 import json
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from ...utils.match import match_param
 import os
 
 
 def merge_docs_into_openapi(
     generated_docs_path: str,
-    traces_path: str,
     openapi_spec_path: str,
+    traces_path: str,
     function_mapping_path: str = None,
     output_path: str = None,
+    module_path_separator: Optional[str] = "__",
+    variant_separator: Optional[str] = "-",
 ) -> Dict[str, Any]:
     with open(generated_docs_path, "r") as f:
         generated_docs = json.load(f)
 
-    with open(traces_path, "r") as f:
-        traces = json.load(f)
-
     with open(openapi_spec_path, "r") as f:
         openapi_spec = json.load(f)
+
+    with open(traces_path, "r") as f:
+        traces = json.load(f)
 
     with open(function_mapping_path, "r") as f:
         function_mapping = json.load(f)
 
+    schemas = openapi_spec["components"]["schemas"]
+    schema_dict = {}
+    for schema_name in schemas:
+        schema = schema_name
+        schema = schema.split(variant_separator)[0]
+        schema = schema.split(module_path_separator)
+        schema = ".".join(schema)
+        if schema not in schema_dict:
+            schema_dict[schema] = [schema_name]
+        else:
+            schema_dict[schema].append(schema_name)
+
     # Track statistics
     stats = {
+        "number of endpoints in static docs:": len(openapi_spec["paths"]),
+        "number of endpoint methods in static docs:": sum(len(methods) for methods in openapi_spec["paths"].values()),
         "total_components": len(generated_docs),
-        "endpoints_processed": 0,
-        "endpoints_added": 0,
-        "endpoints_not_found": [],
+        "endpoint_methods_processed": 0,
+        "endpoint_methods_added": 0,
+        "endpoint_methods_not_found": [],
+        "number of schemas in static docs:": len(openapi_spec["components"]["schemas"]),
         "schemas_processed": 0,
         "schemas_added": 0,
         "schemas_not_found": [],
@@ -47,7 +64,7 @@ def merge_docs_into_openapi(
         file_path = traces.get(component_id, {}).get("file", None)
 
         if endpoints:
-            stats["endpoints_processed"] += len(endpoints)
+            stats["endpoint_methods_processed"] += len(endpoints)
 
             for endpoint_key, doc_text in endpoints.items():
                 method, path = endpoint_key.split(":")
@@ -58,7 +75,7 @@ def merge_docs_into_openapi(
                 )
 
                 if not openapi_path:
-                    stats["endpoints_not_found"].append(
+                    stats["endpoint_methods_not_found"].append(
                         {
                             "component": component_id,
                             "endpoint": endpoint_key,
@@ -68,6 +85,7 @@ def merge_docs_into_openapi(
                     continue
 
                 openapi_path["description"] = doc_text
+
                 if "x-trace" not in openapi_path:
                     openapi_path["x-trace"] = {}
                 openapi_path["x-trace"]["start_line"] = start_line
@@ -75,28 +93,37 @@ def merge_docs_into_openapi(
                 openapi_path["x-trace"]["file"] = file_path
                 stats["endpoints_added"] += 1
 
+                stats["endpoint_methods_added"] += 1
+
+                
+
         if schema:
-            schema_name = (component_id.split("."))[-1]
-            stats["schemas_processed"] += 1
+            schema_object = schema_dict.get(component_id, None)
+            
+            if schema_object is None:
+                name = component_id.split(".")[-1]
+                schema_object = schema_dict.get(name, None)
 
-            openapi_path = openapi_spec["components"]["schemas"].get(schema_name, None)
-
-            if not openapi_path:
+            if not schema_object:
                 stats["schemas_not_found"].append(
                     {
                         "component": component_id,
-                        "reason": f"Component schema {schema_name} not found in OpenAPI",
+                        "reason": f"Component schema {component_id} not found in OpenAPI",
                     }
                 )
                 continue
 
-            openapi_path["description"] = schema
-            if "x-trace" not in openapi_path:
-                openapi_path["x-trace"] = {}
-            openapi_path["x-trace"]["start_line"] = start_line
-            openapi_path["x-trace"]["end_line"] = end_line
-            openapi_path["x-trace"]["file"] = file_path
-            stats["schemas_added"] += 1
+            for schema_path in schema_object:
+                openapi_path = openapi_spec["components"]["schemas"].get(schema_path, None)
+
+                openapi_path["description"] = schema
+                if "x-trace" not in openapi_path:
+                    openapi_path["x-trace"] = {}
+                openapi_path["x-trace"]["start_line"] = start_line
+                openapi_path["x-trace"]["end_line"] = end_line
+                openapi_path["x-trace"]["file"] = file_path
+                stats["schemas_added"] += 1
+
 
         if path_param or query_param:
             stats["parameters_processed"] += 1

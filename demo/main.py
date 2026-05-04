@@ -123,6 +123,8 @@ if __name__ == "__main__":
         top_k=10,
     )
 
+    # searcher = Searcher(db_storage)
+
     generate = Generator(
         model=generate_model,
         model_provider=generate_model_provider,
