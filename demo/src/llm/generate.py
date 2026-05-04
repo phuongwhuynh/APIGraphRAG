@@ -158,6 +158,7 @@ class Generator(BasicModel):
     def _llm_call(self, state: WorkerState):
         """Worker using llm core for document generation"""
         trace = {
+            "file": state["component"].relative_path,
             "start_line": state["component"].start_line,
             "end_line": state["component"].end_line,
         }

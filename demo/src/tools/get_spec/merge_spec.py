@@ -44,6 +44,7 @@ def merge_docs_into_openapi(
         query_param = doc_data.get("query_parameter", "")
         start_line = traces.get(component_id, {}).get("start_line", None)
         end_line = traces.get(component_id, {}).get("end_line", None)
+        file_path = traces.get(component_id, {}).get("file", None)
 
         if endpoints:
             stats["endpoints_processed"] += len(endpoints)
@@ -67,10 +68,11 @@ def merge_docs_into_openapi(
                     continue
 
                 openapi_path["description"] = doc_text
-                if "x-traces" not in openapi_path:
-                    openapi_path["x-traces"] = {}
-                openapi_path["x-traces"]["start_line"] = start_line
-                openapi_path["x-traces"]["end_line"] = end_line
+                if "x-trace" not in openapi_path:
+                    openapi_path["x-trace"] = {}
+                openapi_path["x-trace"]["start_line"] = start_line
+                openapi_path["x-trace"]["end_line"] = end_line
+                openapi_path["x-trace"]["file"] = file_path
                 stats["endpoints_added"] += 1
 
         if schema:
@@ -89,10 +91,11 @@ def merge_docs_into_openapi(
                 continue
 
             openapi_path["description"] = schema
-            if "x-traces" not in openapi_path:
-                openapi_path["x-traces"] = {}
-            openapi_path["x-traces"]["start_line"] = start_line
-            openapi_path["x-traces"]["end_line"] = end_line
+            if "x-trace" not in openapi_path:
+                openapi_path["x-trace"] = {}
+            openapi_path["x-trace"]["start_line"] = start_line
+            openapi_path["x-trace"]["end_line"] = end_line
+            openapi_path["x-trace"]["file"] = file_path
             stats["schemas_added"] += 1
 
         if path_param or query_param:
@@ -127,11 +130,12 @@ def merge_docs_into_openapi(
                             param_name, [param["name"]]
                         ):
                             param["description"] = path_param
-                            if "x-traces" not in param:
-                                param["x-traces"] = {}
-                            param["x-traces"] = {
+                            if "x-trace" not in param:
+                                param["x-trace"] = {}
+                            param["x-trace"] = {
                                 "start_line": start_line,
                                 "end_line": end_line,
+                                "file": file_path,
                             }
                             stats["parameters_added"] += 1
                             added = True
@@ -142,11 +146,12 @@ def merge_docs_into_openapi(
                             param_name, [param["name"]]
                         ):
                             param["description"] = query_param
-                            if "x-traces" not in param:
-                                param["x-traces"] = {}
-                            param["x-traces"] = {
+                            if "x-trace" not in param:
+                                param["x-trace"] = {}
+                            param["x-trace"] = {
                                 "start_line": start_line,
                                 "end_line": end_line,
+                                "file": file_path,
                             }
                             stats["parameters_added"] += 1
                             added = True
