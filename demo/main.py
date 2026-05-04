@@ -24,6 +24,7 @@ CURRENT_PATH = Path(__file__)
 REPO_DIR = CURRENT_PATH.parent.parent / "data" / "dispatch"
 OUTPUT_DIR = CURRENT_PATH.parent / "output"
 OPENAPI_SPEC_PATH = OUTPUT_DIR / REPO_DIR.name
+FUNCTION_MAPPING_PATH = OUTPUT_DIR / (REPO_DIR.name + "_map.json")
 RESULTED_OPENAPI_SPEC_PATH = OUTPUT_DIR / ("resulted_" + REPO_DIR.name)
 RANK_OUTPUT_FILEPATH = OUTPUT_DIR / "rank_output.json"
 COT_OUTPUT_FILEPATH = OUTPUT_DIR / "cot_output.json"
@@ -60,8 +61,8 @@ def generate_docs(
 
 
 if __name__ == "__main__":
-    # if OUTPUT_DIR.exists():
-    #     shutil.rmtree(OUTPUT_DIR)
+    if OUTPUT_DIR.exists():
+        shutil.rmtree(OUTPUT_DIR)
 
     db_storage = Storage("dependency_graph.db")
     db_storage._init_db()
@@ -143,14 +144,15 @@ if __name__ == "__main__":
             for i in range(0, len(group), 5):
                 batch = group[i : i + 5]
                 batch = db_storage.get_batch(batch)
-                # print("The components number in batch: ", len(batch), type(batch[0]))
 
                 generate_docs(components=batch, cot=cot, rank=rank, generate=generate)
 
                 pbar.update(len(batch))
 
-    # merge_docs_into_openapi(
-    #     GENERATE_OUTPUT_FILEPATH,
-    #     OPENAPI_SPEC_PATH.with_suffix(".json"),
-    #     RESULTED_OPENAPI_SPEC_PATH.with_suffix(".json"),
-    # )
+    merge_docs_into_openapi(
+        generated_docs_path=GENERATE_OUTPUT_FILEPATH,
+        traces_path=TRACES_OUTPUT_FILEPATH,
+        openapi_spec_path=OPENAPI_SPEC_PATH.with_suffix(".json"),
+        function_mapping_path=FUNCTION_MAPPING_PATH,
+        output_path=RESULTED_OPENAPI_SPEC_PATH.with_suffix(".json"),
+    )
