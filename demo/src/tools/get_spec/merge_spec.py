@@ -39,9 +39,11 @@ def merge_docs_into_openapi(
 
     # Track statistics
     stats = {
-        "number of endpoints in static docs:": len(openapi_spec["paths"]),
-        "number of endpoint methods in static docs:": sum(len(methods) for methods in openapi_spec["paths"].values()),
         "total_components": len(generated_docs),
+        "number of endpoints in static docs:": len(openapi_spec["paths"]),
+        "number of endpoint methods in static docs:": sum(
+            len(methods) for methods in openapi_spec["paths"].values()
+        ),
         "endpoint_methods_processed": 0,
         "endpoint_methods_added": 0,
         "endpoint_methods_not_found": [],
@@ -91,15 +93,12 @@ def merge_docs_into_openapi(
                 openapi_path["x-trace"]["start_line"] = start_line
                 openapi_path["x-trace"]["end_line"] = end_line
                 openapi_path["x-trace"]["file"] = file_path
-                stats["endpoints_added"] += 1
 
                 stats["endpoint_methods_added"] += 1
 
-                
-
         if schema:
             schema_object = schema_dict.get(component_id, None)
-            
+
             if schema_object is None:
                 name = component_id.split(".")[-1]
                 schema_object = schema_dict.get(name, None)
@@ -114,7 +113,9 @@ def merge_docs_into_openapi(
                 continue
 
             for schema_path in schema_object:
-                openapi_path = openapi_spec["components"]["schemas"].get(schema_path, None)
+                openapi_path = openapi_spec["components"]["schemas"].get(
+                    schema_path, None
+                )
 
                 openapi_path["description"] = schema
                 if "x-trace" not in openapi_path:
@@ -123,7 +124,6 @@ def merge_docs_into_openapi(
                 openapi_path["x-trace"]["end_line"] = end_line
                 openapi_path["x-trace"]["file"] = file_path
                 stats["schemas_added"] += 1
-
 
         if path_param or query_param:
             stats["parameters_processed"] += 1

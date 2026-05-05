@@ -1,4 +1,3 @@
-import evaluate
 from src.tools.evaluate.BARTScore.bart_score import BARTScorer
 from pathlib import Path
 from typing import List, Dict
@@ -10,8 +9,9 @@ from src.dependency_analyzer.ast_parser import DocType
 # 'Salesforce/codet5-base-multi-sum'
 # 'facebook/bart-large-cnn'
 class TraditionalEvaluator:
-    def __init__(self, output_dir: str, device: str = "cpu", checkpoint: str = 'facebook/bart-large-cnn'):
+    def __init__(self, output_dir: str, device: str = "cpu", checkpoint: str = 'facebook/bart-large-cnn', docstring_evaluate: bool = False):
         self.evaluator = BARTScorer(device=device, checkpoint=checkpoint) 
+        self.docstring_evaluate = docstring_evaluate
         self.api_result = {}
         self.docstring_result = {}
         self.api_result_file = Path(output_dir) / "evaluate" / "openapi_bartscore_result.json"
@@ -23,12 +23,12 @@ class TraditionalEvaluator:
             for doc_type, doc_content in docs.items():
                 if doc_type == "source_code" or (not doc_content):
                     continue
-                if doc_type == DocType.DOCSTRING.value:
+                if not self.docstring_evaluate and doc_type == DocType.DOCSTRING.value:
                     self.docstring_result[code_id] = self._evaluate(source_code=source_code, generated_doc=doc_content)
                 if doc_type == DocType.ENDPOINT.value :
                     for path, doc in doc_content.items():
                         self.api_result[path] = self._evaluate(source_code=source_code, generated_doc=doc)
-                if doc_type == DocType.SCHEMA.value:
+                if doc_type == DocType.SCHEMA.value or doc_type == DocType.PARAMETER.value:
                     self.api_result[code_id] = self._evaluate(source_code=source_code, generated_doc=doc_content)
 
         self._save_results()
