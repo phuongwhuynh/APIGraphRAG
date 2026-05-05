@@ -11,5 +11,3 @@ output/
 *.json
 
 *.log
-
-demo/src/tools/evaluate/BARTScore/
