@@ -16,16 +16,17 @@ RANK_OUTPUT_FILEPATH = OUTPUT_DIR / "rank_output.json"
 COT_OUTPUT_FILEPATH = OUTPUT_DIR / "cot_output.json"
 GENERATE_OUTPUT_FILEPATH = OUTPUT_DIR / "generate_output.json"
 
-merge_docs_into_openapi(
-    generated_docs_path=GENERATE_OUTPUT_FILEPATH,
-    openapi_spec_path=OPENAPI_SPEC_PATH.with_suffix(".json"),
-    output_path=RESULTED_OPENAPI_SPEC_PATH.with_suffix(".json"),
-)
+# merge_docs_into_openapi(
+#     generated_docs_path=GENERATE_OUTPUT_FILEPATH,
+#     openapi_spec_path=OPENAPI_SPEC_PATH.with_suffix(".json"),
+#     output_path=RESULTED_OPENAPI_SPEC_PATH.with_suffix(".json"),
+# )
 
 stats_evaluator = OpenAPIStatsEvaluator(
     file_path=RESULTED_OPENAPI_SPEC_PATH.with_suffix(".json"), output_dir=OUTPUT_DIR
 )
-print(stats_evaluator.evaluate())
+result = stats_evaluator.evaluate()
+print(result["schema_statistics"]["No description schema"])
 
 docstring_evaluate = False
 evaluator_model = "llama3.2:3b"
@@ -43,37 +44,41 @@ llm_evaluator = LLMEvaluator(
 )
 
 
-bartscore_evaluator = TraditionalEvaluator(
-    OUTPUT_DIR, docstring_evaluate=docstring_evaluate
-)
 
 
-db_storage = Storage("dependency_graph.db")
+# bartscore_evaluator = TraditionalEvaluator(
+#     OUTPUT_DIR, docstring_evaluate=docstring_evaluate
+# )
 
 
-generated_docs = load_json(GENERATE_OUTPUT_FILEPATH)
+# db_storage = Storage("dependency_graph.db")
 
 
-for component_id, component_docs in generated_docs.items():
-    component_docs["source_code"] = (db_storage.get(component_id)).source_code
+# generated_docs = load_json(GENERATE_OUTPUT_FILEPATH)
 
-total_components = len(generated_docs)
 
-with tqdm(total=total_components, desc="Evaluating document") as pbar:
-    batch = {}
-    for compoent_id, component_doc in generated_docs.items():
-        batch[compoent_id] = component_doc
-        if len(batch) < 5:
-            continue
-        elif len(batch) == 5:
-            result = bartscore_evaluator.evaluate(batch)
-            result = llm_evaluator.invoke(batch)
-            pbar.update(len(batch))
-            batch = {}
+# for component_id, component_docs in generated_docs.items():
+#     component_docs["source_code"] = (db_stocrage.get(component_id)).source_code
 
-    if batch:
-        result = bartscore_evaluator.evaluate(batch)
-        print(result)
-        pbar.update(len(batch))
+# total_components = len(generated_docs)
 
-print(bartscore_evaluator.show_statistic())
+# with tqdm(total=total_components, desc="Evaluating document") as pbar:
+#     batch = {}
+#     for compoent_id, component_doc in generated_docs.items():
+#         batch[compoent_id] = component_doc
+#         if len(batch) < 5:
+#             continue
+#         elif len(batch) == 5:
+#             # result = bartscore_evaluator.evaluate(batch)
+#             result = llm_evaluator.invoke(batch)
+#             pbar.update(len(batch))
+#             batch = {}
+
+#     if batch:
+#         # result = bartscore_evaluator.evaluate(batch)
+#         result = llm_evaluator.invoke(batch)
+#         print(result)
+#         pbar.update(len(batch))
+
+# # print(bartscore_evaluator.show_statistic())
+print(llm_evaluator.show_statistic(llm_evaluator.openapi_result_file))

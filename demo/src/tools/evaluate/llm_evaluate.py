@@ -112,7 +112,6 @@ class LLMEvaluator(BasicModel):
 
         result = self.evaluator.invoke({"code_components": code_components})
 
-        print(f"Result: {result.keys()}\n{result}")
         self.docstring_result = result.get("docstring_results", {})
         self.api_result = result.get("api_results", {})
         self._save_results()
@@ -137,9 +136,9 @@ class LLMEvaluator(BasicModel):
             return {}
 
         stats = {
-            EvaluationAspect.MOTIVATION.title(): [0],
-            EvaluationAspect.FUNCTIONALITY.title(): [0],
-            EvaluationAspect.PARAMETER_ATTRIBUTE_DESCRIPTION.title(): [0],
+            EvaluationAspect.MOTIVATION.value.title(): [],
+            EvaluationAspect.FUNCTIONALITY.value.title(): [],
+            EvaluationAspect.PARAMETER_ATTRIBUTE_DESCRIPTION.value.title(): [],
         }
 
         for _, aspect_scores in data.items():
@@ -149,29 +148,29 @@ class LLMEvaluator(BasicModel):
         return {
             "evaluated_items": self.total_object,
             "MOTIVATION": {
-                "evaluated_items": len(stats[EvaluationAspect.MOTIVATION.title()]),
-                "min": min(stats[EvaluationAspect.MOTIVATION.title()]),
-                "max": max(stats[EvaluationAspect.MOTIVATION.title()]),
-                "avg": mean(stats[EvaluationAspect.MOTIVATION.title()]),
+                "evaluated_items": len(stats[EvaluationAspect.MOTIVATION.value.title()]),
+                "min": min(stats[EvaluationAspect.MOTIVATION.value.title()]),
+                "max": max(stats[EvaluationAspect.MOTIVATION.value.title()]),
+                "avg": mean(stats[EvaluationAspect.MOTIVATION.value.title()]),
             },
             "FUNCTIONALITY": {
-                "evaluated_items": len(stats[EvaluationAspect.FUNCTIONALITY.title()]),
-                "min": min(stats[EvaluationAspect.FUNCTIONALITY.title()]),
-                "max": max(stats[EvaluationAspect.FUNCTIONALITY.title()]),
-                "avg": mean(stats[EvaluationAspect.FUNCTIONALITY.title()]),
+                "evaluated_items": len(stats[EvaluationAspect.FUNCTIONALITY.value.title()]),
+                "min": min(stats[EvaluationAspect.FUNCTIONALITY.value.title()]),
+                "max": max(stats[EvaluationAspect.FUNCTIONALITY.value.title()]),
+                "avg": mean(stats[EvaluationAspect.FUNCTIONALITY.value.title()]),
             },
             "PARAMETER_ATTRIBUTE_DESCRIPTION": {
                 "evaluated_items": len(
-                    stats[EvaluationAspect.PARAMETER_ATTRIBUTE_DESCRIPTION.title()]
+                    stats[EvaluationAspect.PARAMETER_ATTRIBUTE_DESCRIPTION.value.title()]
                 ),
                 "min": min(
-                    stats[EvaluationAspect.PARAMETER_ATTRIBUTE_DESCRIPTION.title()]
+                    stats[EvaluationAspect.PARAMETER_ATTRIBUTE_DESCRIPTION.value.title()]
                 ),
                 "max": max(
-                    stats[EvaluationAspect.PARAMETER_ATTRIBUTE_DESCRIPTION.title()]
+                    stats[EvaluationAspect.PARAMETER_ATTRIBUTE_DESCRIPTION.value.title()]
                 ),
                 "avg": mean(
-                    stats[EvaluationAspect.PARAMETER_ATTRIBUTE_DESCRIPTION.title()]
+                    stats[EvaluationAspect.PARAMETER_ATTRIBUTE_DESCRIPTION.value.title()]
                 ),
             },
         }
@@ -183,13 +182,16 @@ class LLMEvaluator(BasicModel):
             for doc_type, doc_content in code_component.items():
                 if doc_type == "source_code" or (not doc_content):
                     continue
-                if self.docstring_evaluate and doc_type == DocType.DOCSTRING.value:
+                if not self.docstring_evaluate and doc_type == DocType.DOCSTRING.value:
                     continue
-                print(f"doc_type: {doc_type}\ndoc_content: {doc_content}")
                 criteria = self._get_criteria(doc_type)
-                has_parameter_attribute = self._has_parameter_attribute(source_code)
 
-                if not has_parameter_attribute:
+                # Add evaluate criteria based on the documentation type
+                if doc_type == DocType.PARAMETER.value:
+                    # if it is parameter then only evaluate parameter
+                    criteria = criteria[EvaluationAspect.PARAMETER_ATTRIBUTE_DESCRIPTION]
+                else:
+                    # if it is description for endpoint/schema we remove parameter evaluation criteria
                     criteria.pop(EvaluationAspect.PARAMETER_ATTRIBUTE_DESCRIPTION, None)
 
                 for c in criteria.keys():
