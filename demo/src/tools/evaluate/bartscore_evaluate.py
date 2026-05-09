@@ -23,7 +23,7 @@ class TraditionalEvaluator:
             for doc_type, doc_content in docs.items():
                 if doc_type == "source_code" or (not doc_content):
                     continue
-                if not self.docstring_evaluate and doc_type == DocType.DOCSTRING.value:
+                if self.docstring_evaluate and doc_type == DocType.DOCSTRING.value:
                     self.docstring_result[code_id] = self._evaluate(source_code=source_code, generated_doc=doc_content)
                 if doc_type == DocType.ENDPOINT.value :
                     for path, doc in doc_content.items():
@@ -42,7 +42,7 @@ class TraditionalEvaluator:
     def _evaluate(self, source_code: str, generated_doc: str):
         # how likely it is that the document could be generated based on the source code
         faithfulness = self.evaluator.score([source_code], [generated_doc])
-        return faithfulness
+        return faithfulness[0]
         
 
     def _save_results(self):
