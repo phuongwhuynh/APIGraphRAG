@@ -51,34 +51,34 @@ llm_evaluator = LLMEvaluator(
 # )
 
 
-# db_storage = Storage("dependency_graph.db")
+db_storage = Storage("dependency_graph.db")
 
 
-# generated_docs = load_json(GENERATE_OUTPUT_FILEPATH)
+generated_docs = load_json(GENERATE_OUTPUT_FILEPATH)
 
 
-# for component_id, component_docs in generated_docs.items():
-#     component_docs["source_code"] = (db_stocrage.get(component_id)).source_code
+for component_id, component_docs in generated_docs.items():
+    component_docs["source_code"] = (db_storage.get(component_id)).source_code
 
-# total_components = len(generated_docs)
+total_components = len(generated_docs)
 
-# with tqdm(total=total_components, desc="Evaluating document") as pbar:
-#     batch = {}
-#     for compoent_id, component_doc in generated_docs.items():
-#         batch[compoent_id] = component_doc
-#         if len(batch) < 5:
-#             continue
-#         elif len(batch) == 5:
-#             # result = bartscore_evaluator.evaluate(batch)
-#             result = llm_evaluator.invoke(batch)
-#             pbar.update(len(batch))
-#             batch = {}
+with tqdm(total=total_components, desc="Evaluating document") as pbar:
+    batch = {}
+    for compoent_id, component_doc in generated_docs.items():
+        batch[compoent_id] = component_doc
+        if len(batch) < 5:
+            continue
+        elif len(batch) == 5:
+            # result = bartscore_evaluator.evaluate(batch)
+            result = llm_evaluator.invoke(batch)
+            pbar.update(len(batch))
+            batch = {}
 
-#     if batch:
-#         # result = bartscore_evaluator.evaluate(batch)
-#         result = llm_evaluator.invoke(batch)
-#         print(result)
-#         pbar.update(len(batch))
+    if batch:
+        # result = bartscore_evaluator.evaluate(batch)
+        result = llm_evaluator.invoke(batch)
+        print(result)
+        pbar.update(len(batch))
 
-# # print(bartscore_evaluator.show_statistic())
+# print(bartscore_evaluator.show_statistic())
 print(llm_evaluator.show_statistic(llm_evaluator.openapi_result_file))
