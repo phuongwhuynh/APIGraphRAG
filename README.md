@@ -68,7 +68,7 @@ The current experiments target [Netflix Dispatch](https://github.com/Netflix/dis
 ├── requirements.txt
 ├── data/
 │   └── dispatch/                 # target codebase used in the experiments
-└── demo/                         # the pipeline
+└── api_graphrag/                 # the pipeline
     ├── main.py                   # end-to-end generation pipeline (steps 1–5)
     ├── evaluate_result.py        # evaluation of the generated output (step 6)
     ├── count_tokens.py           # total LLM token usage from the run logs
@@ -112,7 +112,7 @@ The current experiments target [Netflix Dispatch](https://github.com/Netflix/dis
 
    BARTScore evaluation additionally needs `torch`.
 
-2. Models — the defaults in `demo/main.py` use `qwen2.5-coder:7b` through Ollama:
+2. Models — the defaults in `api_graphrag/main.py` use `qwen2.5-coder:7b` through Ollama:
 
    ```bash
    ollama pull qwen2.5-coder:7b
@@ -125,7 +125,7 @@ The current experiments target [Netflix Dispatch](https://github.com/Netflix/dis
 
 ## Configuration
 
-Set these in `demo/main.py`:
+Set these in `api_graphrag/main.py`:
 
 | Setting | Meaning |
 | --- | --- |
@@ -142,15 +142,15 @@ Set these in `demo/main.py`:
 ## Running
 
 ```bash
-cd demo
+cd api_graphrag
 python main.py             # generate documentation and the enriched spec
 python evaluate_result.py  # evaluate it
 python count_tokens.py     # total tokens spent
 ```
 
-`main.py` deletes `demo/output/` at start-up. A previously extracted spec is reused only if it is still present, so the extraction step re-runs on every fresh run.
+`main.py` deletes `api_graphrag/output/` at start-up. A previously extracted spec is reused only if it is still present, so the extraction step re-runs on every fresh run.
 
-## Outputs (`demo/output/`)
+## Outputs (`api_graphrag/output/`)
 
 | File | Content |
 | --- | --- |
