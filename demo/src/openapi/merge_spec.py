@@ -1,6 +1,6 @@
 import json
 from typing import Dict, Any, Optional
-from ...utils.match import match_param
+from src.utils.match import match_param
 import os
 
 
@@ -123,7 +123,7 @@ def merge_docs_into_openapi(
                 openapi_path["x-trace"]["start_line"] = start_line
                 openapi_path["x-trace"]["end_line"] = end_line
                 openapi_path["x-trace"]["file"] = file_path
-                stats["schemas_added"] += 1
+                # stats["schemas_added"] += 1
 
         if path_param or query_param:
             stats["parameters_processed"] += 1

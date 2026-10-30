@@ -12,7 +12,7 @@ from tqdm.auto import tqdm
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Set, Optional, Literal, Dict, Any, Tuple
-from src.tools.get_spec.get_spec import SpecGetterFactory
+from src.openapi.spec_extractor import SpecGetterFactory
 from enum import Enum
 from src.utils.match import match_param
 

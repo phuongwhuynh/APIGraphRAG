@@ -4,7 +4,7 @@ import time
 import json
 from pathlib import Path
 from typing import Literal, Optional, Set
-from src.tools.json.json import load_json
+from src.utils.json_io import load_json
 
 logger = logging.getLogger(__name__)
 

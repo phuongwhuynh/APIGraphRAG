@@ -16,9 +16,8 @@ from src.llm.cot import CoT
 from src.llm.generate import Generator
 from src.database.storage import Storage
 from langchain_core.runnables import RunnableConfig
-from src.tools.get_spec.merge_spec import merge_docs_into_openapi
-from src.tools.json.json import save_as_json, load_json
-
+from src.openapi.merge_spec import merge_docs_into_openapi
+from src.utils.json_io import save_as_json, load_json
 
 CURRENT_PATH = Path(__file__)
 REPO_DIR = CURRENT_PATH.parent.parent / "data" / "dispatch"
@@ -67,11 +66,11 @@ if __name__ == "__main__":
     db_storage = Storage("dependency_graph.db")
     db_storage._init_db()
 
-    rank_model = "llama3.2:3b"
+    rank_model = "qwen2.5-coder:7b"
     rank_model_provider = "openai"
-    cot_model = "llama3.2:3b"
+    cot_model = "qwen2.5-coder:7b"
     cot_model_provider = "ollama"
-    generate_model = "llama3.2:3b"
+    generate_model = "qwen2.5-coder:7b"
     generate_model_provider = "ollama"
 
     # Build dependency graph
@@ -140,9 +139,9 @@ if __name__ == "__main__":
     with tqdm(total=total_files, desc="Generating document") as pbar:
         for group in topo_order:
 
-            # Process components in batches of max 5
-            for i in range(0, len(group), 5):
-                batch = group[i : i + 5]
+            # Process components in batches of max 2
+            for i in range(0, len(group), 2):
+                batch = group[i : i + 2]
                 batch = db_storage.get_batch(batch)
 
                 generate_docs(components=batch, cot=cot, rank=rank, generate=generate)

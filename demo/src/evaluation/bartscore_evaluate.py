@@ -1,7 +1,7 @@
-from src.tools.evaluate.BARTScore.bart_score import BARTScorer
+from src.evaluation.BARTScore.bart_score import BARTScorer
 from pathlib import Path
 from typing import List, Dict
-from src.tools.json.json import save_as_json, load_json
+from src.utils.json_io import save_as_json, load_json
 from statistics import mean
 from src.dependency_analyzer.ast_parser import DocType
 

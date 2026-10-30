@@ -51,8 +51,7 @@ You are an Expert Technical Writer and Senior Software Architect. Your primary m
 <GLOBAL RULES>
 - Never include reasoning or explanations of your thinking.
 - Never infer information not explicitly present in the input.
-- Never add extra sections beyond what is requested.
-- Never use markdown, bullet points, or structured formatting unless explicitly requested.
+- Never use markdown, bullet points, or structured formatting. Return pure plain text.
 </GLOBAL RULES>
 
 
@@ -98,7 +97,7 @@ To achieve the highest quality, your description MUST include:
 1. Purpose: The strategic business value and overarching goal of this endpoint for the API consumer.
 2. Functionality & Side Effects: The primary action performed, PLUS any secondary system state changes (e.g., cascading deletes, async jobs queued, webhooks fired).
 
-Output ONLY the descriptive text in normal format (not including markdowns,...) that belongs in the `description` field. 
+Output ONLY the descriptive text in pure plain text that belongs in the `description` field. 
 """
 
 GENERATE_SCHEMA_PROMPT = """
@@ -112,12 +111,11 @@ Schema Name: {schema_name}
 To achieve the highest quality and provide maximum value to the API consumer, your documentation MUST adhere to the following directives:
 
 1. Object Purpose & Role: Explain what this data object represents in the business domain and its core purpose within the broader system.
-2. Lifecycle & State: If applicable, describe how this object changes over time (e.g., is it immutable after creation? Does it have strict state transitions like PENDING -> COMPLETED?).
-3. Field Business Context: Explain the 'why' behind specific fields. Detail any complex cross-parameter dependencies (e.g., "Field A is required only if Field B is true"). 
-4. Avoid Redundancy: DO NOT merely repeat basic JSON schema types or constraints (like "This is a string" or "Max length is 10"). Focus on human-readable business context.
-5. Metadata Preservation: If the provided code already contains descriptions, comments, or examples for specific fields, you MUST preserve them. Use the <Supporting Context> to enrich them only if they lack business clarity.
+2. Field Business Context: Explain the 'why' behind specific fields. Detail any complex cross-parameter dependencies (e.g., "Field A is required only if Field B is true"). 
+3. Avoid Redundancy: DO NOT merely repeat basic JSON schema types or constraints (like "This is a string" or "Max length is 10"). Focus on human-readable business context.
+4. Metadata Preservation: If the provided code already contains descriptions, comments, or examples for specific fields, you MUST preserve them. Use the <Supporting Context> to enrich them only if they lack business clarity.
 
-Output ONLY the descriptive text in normal format (not including markdowns,...) that belongs in the `description` fields of the schema and its underlying properties.
+Output ONLY the descriptive text in pure plain text that belongs in the `description` fields of the schema and its underlying properties.
 """
 
 GENERATE_PARAMETER_PROMPT = """
@@ -128,6 +126,10 @@ GENERATE_PARAMETER_PROMPT = """
 Task: Write parameter description.
 Parameter name: {parameter_name}
 Parameter type: {parameter_type}
+
+To achieve the highest quality, your description MUST include:
+1. Purpose: The strategic business value and overarching goal of this endpoint for the API consumer.
+2. Functionality & Edge Cases: The primary role of this parameter, PLUS any important edge cases or interactions with other parameters (e.g., "This parameter is required if 'X' is true" or "This parameter accepts a comma-separated list of values").
 
 STRICT RULES:
 - Use ONLY explicit information from context.

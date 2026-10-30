@@ -8,7 +8,6 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.types import Send
 from src.dependency_analyzer.ast_parser import CodeComponent, DocType
 from src.llm.prompt import COT_SYSTEM_PROMPT, RANK_INSTRUCT
-from src.tools.rank import sliding_window
 from math import ceil
 
 

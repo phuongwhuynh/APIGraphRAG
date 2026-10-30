@@ -13,7 +13,7 @@ import operator
 
 from src.llm.base import BasicModel
 from src.llm.prompt import EVALUATE_PROMPT, EVALUATE_SYSTEM_PROMPT
-from src.tools.json.json import save_as_json, load_json
+from src.utils.json_io import save_as_json, load_json
 from src.dependency_analyzer.ast_parser import DocType
 
 
@@ -112,7 +112,7 @@ class LLMEvaluator(BasicModel):
 
         result = self.evaluator.invoke({"code_components": code_components})
 
-        print(f"Result: {result.keys()}\n{result}")
+        # print(f"Result: {result.keys()}\n{result}")
         self.docstring_result = result.get("docstring_results", {})
         self.api_result = result.get("api_results", {})
         self._save_results()
@@ -185,7 +185,6 @@ class LLMEvaluator(BasicModel):
                     continue
                 if self.docstring_evaluate and doc_type == DocType.DOCSTRING.value:
                     continue
-                print(f"doc_type: {doc_type}\ndoc_content: {doc_content}")
                 criteria = self._get_criteria(doc_type)
                 has_parameter_attribute = self._has_parameter_attribute(source_code)
 

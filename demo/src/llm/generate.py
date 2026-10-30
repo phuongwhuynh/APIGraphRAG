@@ -162,22 +162,22 @@ class Generator(BasicModel):
             "start_line": state["component"].start_line,
             "end_line": state["component"].end_line,
         }
-        if len(state["component"].doc_type) <= 1:
-            return {
-                "worker_docs": [
-                    (
-                        state["component"].id,
-                        {
-                            "docstring": "",
-                            "endpoint": {},
-                            "schema": "",
-                            "path_parameter": {},
-                            "query_parameter": {},
-                        },
-                        trace,
-                    )
-                ]
-            }
+        # if len(state["component"].doc_type) <= 1:
+        #     return {
+        #         "worker_docs": [
+        #             (
+        #                 state["component"].id,
+        #                 {
+        #                     "docstring": "",
+        #                     "endpoint": {},
+        #                     "schema": "",
+        #                     "path_parameter": {},
+        #                     "query_parameter": {},
+        #                 },
+        #                 trace,
+        #             )
+        #         ]
+        #     }
 
         source_code = state["component"].source_code
         doc_type = state["component"].doc_type
