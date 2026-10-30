@@ -22,8 +22,6 @@ Analyze the provided code component and identify the key elements that require e
 - Custom Data Types: Identify any custom classes or complex types used. Briefly summarize why understanding these missing pieces is critical to documenting the code's true purpose.
 
 - Undefined Invocations: List any methods or functions called within the code that are not defined here. Briefly summarize why understanding these missing pieces is critical to documenting the code's true purpose.
-
-- Complex Logic Blocks: Identify specific blocks of code where data is significantly filtered, transformed, or evaluated (e.g., nested loops, specific if/else conditions). Note what the logic is doing structurally, and state that context is needed to explain why.
 """
 
 RANK_INSTRUCT = """
@@ -97,7 +95,7 @@ To achieve the highest quality, your description MUST include:
 1. Purpose: The strategic business value and overarching goal of this endpoint for the API consumer.
 2. Functionality & Side Effects: The primary action performed, PLUS any secondary system state changes (e.g., cascading deletes, async jobs queued, webhooks fired).
 
-Output ONLY the descriptive text in pure plain text that belongs in the `description` field. 
+Output ONLY the descriptive text in normal format (not including markdowns,yaml,json,...) that belongs in the `description` field. 
 """
 
 GENERATE_SCHEMA_PROMPT = """
@@ -115,7 +113,7 @@ To achieve the highest quality and provide maximum value to the API consumer, yo
 3. Avoid Redundancy: DO NOT merely repeat basic JSON schema types or constraints (like "This is a string" or "Max length is 10"). Focus on human-readable business context.
 4. Metadata Preservation: If the provided code already contains descriptions, comments, or examples for specific fields, you MUST preserve them. Use the <Supporting Context> to enrich them only if they lack business clarity.
 
-Output ONLY the descriptive text in pure plain text that belongs in the `description` fields of the schema and its underlying properties.
+Output ONLY the descriptive text in normal format (not including markdowns,yaml,json,...) that belongs in the `description` fields of the schema and its underlying properties.
 """
 
 GENERATE_PARAMETER_PROMPT = """

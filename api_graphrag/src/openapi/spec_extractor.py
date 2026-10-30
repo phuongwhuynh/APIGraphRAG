@@ -166,8 +166,8 @@ class BaseSpecGetter:
         for schema_name in schemas.keys():
             schema_name = schema_name.split(self.variant_seperator)[0]
             splitted_name = schema_name.split(self.module_path_seperator)
-            if len(splitted_name) <= 1:
-                returned_schema.add(schema_name)
+            if len(splitted_name) == 1:
+                returned_schema.add(schema_name[0])
             else:
                 returned_schema.add(".".join(splitted_name))
 

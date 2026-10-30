@@ -29,7 +29,8 @@ FUNCTION_MAPPING_PATH = OUTPUT_DIR / (REPO_DIR.name + "_map.json")
 stats_evaluator = OpenAPIStatsEvaluator(
     file_path=RESULTED_OPENAPI_SPEC_PATH.with_suffix(".json"), output_dir=OUTPUT_DIR
 )
-print(stats_evaluator.evaluate())
+result = stats_evaluator.evaluate()
+print(result["schema_statistics"]["No description schema"])
 
 docstring_evaluate = False
 evaluator_model = "qwen2.5-coder:7b"
@@ -69,7 +70,7 @@ with tqdm(total=total_components, desc="Evaluating document") as pbar:
         batch[compoent_id] = component_doc
         if len(batch) < 2:
             continue
-        elif len(batch) == 2:
+        elif len(batch) == 5:
             # result = bartscore_evaluator.evaluate(batch)
             result = llm_evaluator.invoke(batch)
             pbar.update(len(batch))
@@ -82,3 +83,4 @@ with tqdm(total=total_components, desc="Evaluating document") as pbar:
         pbar.update(len(batch))
 
 # print(bartscore_evaluator.show_statistic())
+print(llm_evaluator.show_statistic(llm_evaluator.openapi_result_file))

@@ -235,6 +235,7 @@ class DependencyCollector(ast.NodeVisitor):
                     return
 
     def visit_ClassDef(self, node: ast.ClassDef):
+        # Further development: For class (Inherting class) inherit from another class (Inherited class) -> then the Inherting class should depends on all the methods in the Inherited class also. Here we only care about the class alone
         old_class = self._current_class
         self._current_class = node.name
 
@@ -248,6 +249,7 @@ class DependencyCollector(ast.NodeVisitor):
         self.generic_visit(node)
 
     def visit_Call(self, node: ast.Call):
+        # Further development: lack the case of self.method() or class.method() --> should code another mechanism for _process_attribute instead of using the current.
         if isinstance(node.func, ast.Name):
             self._add_dependency(node.func.id)
         if isinstance(node.func, ast.Attribute):
@@ -849,6 +851,7 @@ class DependencyParser:
 
     def _add_class_method_dependencies(self):
         """Make each method depend on its parent class."""
+        # Further development: It may be better to reverse the relationship - the class depends on its methods and each methods when get source code should include the class init source code as well. 
         for component_id, component in tqdm(
             self.components.items(), desc="Wiring class/method deps", unit="component"
         ):

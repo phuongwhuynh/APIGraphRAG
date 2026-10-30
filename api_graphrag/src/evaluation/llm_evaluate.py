@@ -6,7 +6,7 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.types import Send
 import ast
 import math
-from statistics import mean, pstdev
+from statistics import mean, pstdev, median, quantiles
 from pathlib import Path
 import json
 import operator
@@ -108,11 +108,10 @@ class LLMEvaluator(BasicModel):
         component_id -> doc_type -> aspect -> score
         """
 
-        self.total_object = len(code_components)
+        self.total_object += len(code_components)
 
         result = self.evaluator.invoke({"code_components": code_components})
 
-        # print(f"Result: {result.keys()}\n{result}")
         self.docstring_result = result.get("docstring_results", {})
         self.api_result = result.get("api_results", {})
         self._save_results()
@@ -130,6 +129,43 @@ class LLMEvaluator(BasicModel):
                 file_path=self.docstring_result_file, data=self.docstring_result
             )
 
+    def _calculate_statistics(self, scores: List[float]) -> Dict[str, float]:
+        """
+        Calculate comprehensive statistics for a list of scores.
+
+        Returns a dictionary with: count, min, max, avg, median, std_dev,
+        coefficient_of_variation, Q1, Q2, Q3.
+        """
+        if not scores:
+            return {}
+
+        count = len(scores)
+        avg = mean(scores)
+        std_dev = pstdev(scores) if count > 1 else 0.0
+
+        # Calculate coefficient of variation (CV = std_dev / mean * 100)
+        cv = (std_dev / avg * 100) if avg != 0 else 0.0
+
+        # Calculate quartiles using quantiles
+        if count >= 3:
+            quarts = quantiles(scores, n=4)  # Returns Q1, Q2 (median), Q3
+            q1, q2, q3 = quarts[0], quarts[1], quarts[2]
+        else:
+            q1 = q2 = q3 = median(scores) if count > 0 else 0.0
+
+        return {
+            "count": count,
+            "min": min(scores),
+            "max": max(scores),
+            "avg": round(avg, 4),
+            "median": round(q2, 4),
+            "std_dev": round(std_dev, 4),
+            "cv_percent": round(cv, 2),  # Coefficient of variation as percentage
+            "Q1": round(q1, 4),
+            "Q2": round(q2, 4),
+            "Q3": round(q3, 4),
+        }
+
     def show_statistic(self, file_path: str):
         data = load_json(file_path=file_path)
 
@@ -137,9 +173,9 @@ class LLMEvaluator(BasicModel):
             return {}
 
         stats = {
-            EvaluationAspect.MOTIVATION.title(): [0],
-            EvaluationAspect.FUNCTIONALITY.title(): [0],
-            EvaluationAspect.PARAMETER_ATTRIBUTE_DESCRIPTION.title(): [0],
+            EvaluationAspect.MOTIVATION.value.title(): [],
+            EvaluationAspect.FUNCTIONALITY.value.title(): [],
+            EvaluationAspect.PARAMETER_ATTRIBUTE_DESCRIPTION.value.title(): [],
         }
 
         for _, aspect_scores in data.items():
@@ -148,32 +184,12 @@ class LLMEvaluator(BasicModel):
 
         return {
             "evaluated_items": self.total_object,
-            "MOTIVATION": {
-                "evaluated_items": len(stats[EvaluationAspect.MOTIVATION.title()]),
-                "min": min(stats[EvaluationAspect.MOTIVATION.title()]),
-                "max": max(stats[EvaluationAspect.MOTIVATION.title()]),
-                "avg": mean(stats[EvaluationAspect.MOTIVATION.title()]),
-            },
-            "FUNCTIONALITY": {
-                "evaluated_items": len(stats[EvaluationAspect.FUNCTIONALITY.title()]),
-                "min": min(stats[EvaluationAspect.FUNCTIONALITY.title()]),
-                "max": max(stats[EvaluationAspect.FUNCTIONALITY.title()]),
-                "avg": mean(stats[EvaluationAspect.FUNCTIONALITY.title()]),
-            },
-            "PARAMETER_ATTRIBUTE_DESCRIPTION": {
-                "evaluated_items": len(
-                    stats[EvaluationAspect.PARAMETER_ATTRIBUTE_DESCRIPTION.title()]
-                ),
-                "min": min(
-                    stats[EvaluationAspect.PARAMETER_ATTRIBUTE_DESCRIPTION.title()]
-                ),
-                "max": max(
-                    stats[EvaluationAspect.PARAMETER_ATTRIBUTE_DESCRIPTION.title()]
-                ),
-                "avg": mean(
-                    stats[EvaluationAspect.PARAMETER_ATTRIBUTE_DESCRIPTION.title()]
-                ),
-            },
+            EvaluationAspect.MOTIVATION.value.title(): self._calculate_statistics(
+                stats[EvaluationAspect.MOTIVATION.value.title()]
+            ),
+            EvaluationAspect.FUNCTIONALITY.value.title(): self._calculate_statistics(
+                stats[EvaluationAspect.FUNCTIONALITY.value.title()]
+            ),
         }
 
     def _assign_worker(self, state: State) -> Dict[str, float]:
@@ -183,13 +199,9 @@ class LLMEvaluator(BasicModel):
             for doc_type, doc_content in code_component.items():
                 if doc_type == "source_code" or (not doc_content):
                     continue
-                if self.docstring_evaluate and doc_type == DocType.DOCSTRING.value:
+                if not self.docstring_evaluate and doc_type == DocType.DOCSTRING.value:
                     continue
                 criteria = self._get_criteria(doc_type)
-                has_parameter_attribute = self._has_parameter_attribute(source_code)
-
-                if not has_parameter_attribute:
-                    criteria.pop(EvaluationAspect.PARAMETER_ATTRIBUTE_DESCRIPTION, None)
 
                 for c in criteria.keys():
                     criteria_str = self._format_criteria({c: criteria[c]})
@@ -311,8 +323,8 @@ class LLMEvaluator(BasicModel):
         )
         return expected_score
 
-    def _get_criteria(self, doc_type: Literal["docstring", "endpoint", "schema"]):
-        if doc_type == DocType.DOCSTRING:
+    def _get_criteria(self, doc_type: Literal["docstring", "endpoint", "schema", "parameter"]):
+        if doc_type == DocType.DOCSTRING.value:
             return {
                 EvaluationAspect.MOTIVATION: AspectCriteria(
                     description=(
@@ -342,61 +354,86 @@ class LLMEvaluator(BasicModel):
                         ScoreLevel.EXCELLENT: "Perfect balance of clarity and technical detail; explains complex logic elegantly without forcing the reader to read the underlying source code.",
                     },
                 ),
-                EvaluationAspect.PARAMETER_ATTRIBUTE_DESCRIPTION: AspectCriteria(
-                    description=(
-                        "Evaluate how effectively parameter or attribute descriptions convey purpose, "
-                        "constraints, and usage context. They must go beyond basic type hints to explain "
-                        "lifecycle, default behaviors, and execution impacts."
-                    ),
-                    score_criteria={
-                        ScoreLevel.POOR: "Merely restates the type hint or signature into natural language (e.g., 'user_id is an int') without adding context.",
-                        ScoreLevel.FAIR: "Provides basic information about purpose but lacks details about constraints, valid values, or initialization context.",
-                        ScoreLevel.GOOD: "Explains purpose and includes key constraints or valid value ranges, but might miss edge cases or complex state behaviors.",
-                        ScoreLevel.VERY_GOOD: "Clearly explains purpose, constraints, default behaviors, and (for classes) modification patterns.",
-                        ScoreLevel.EXCELLENT: "Comprehensive guidance including edge cases, default behaviors, and impact on execution flow. For classes, thoroughly explains the attribute's lifecycle and immutability.",
-                    },
-                ),
             }
-        return {
+        elif doc_type == DocType.ENDPOINT.value:
+            return {
             EvaluationAspect.MOTIVATION: AspectCriteria(
                 description=(
-                    "Evaluate how well the description explains the business value ('why') "
-                    "It should focus purely on the overarching goal and the strategic reason an API consumer would need this endpoint."
+                    "Assesses how effectively the description communicates the purpose of the endpoint from the perspective of an API consumer — the why that justifies calling this endpoint."
                 ),
                 score_criteria={
-                    ScoreLevel.POOR: "Treats the endpoint purely as a database operation with no business context or workflow guidance.",
-                    ScoreLevel.FAIR: "Vaguely hints at a use case, but lacks clear business value or integration workflow details.",
-                    ScoreLevel.GOOD: "Provides a clear, standard business use case",
-                    ScoreLevel.VERY_GOOD: "Explains specific business scenarios where this endpoint provides crucial value to the client.",
-                    ScoreLevel.EXCELLENT: "Connects the endpoint directly to overarching business goals, providing a compelling 'why' that helps consumers understand its strategic value.",
+                    ScoreLevel.POOR: "No indication of purpose or use case. The description merely restates the HTTP method and path or the function name.",
+                    ScoreLevel.FAIR: "Vaguely hints at a use case but provides no concrete workflow context or consumer-facing value.",
+                    ScoreLevel.GOOD: "Clearly states the business goal or user scenario the endpoint addresses.",
+                    ScoreLevel.VERY_GOOD: "Explains specific scenarios or workflows in which the endpoint provides value to the API consumer.",
+                    ScoreLevel.EXCELLENT: "Provides a precise and concrete articulation of the endpoint's consumer-facing purpose, situating it within a meaningful workflow context that guides a developer on when and why to use it.",
                 },
             ),
             EvaluationAspect.FUNCTIONALITY: AspectCriteria(
                 description=(
-                    "Evaluate how clearly the description explains what the endpoint accomplishes, "
-                    "including BOTH the primary intended action and any secondary system state changes "
-                    "or side effects (e.g., async jobs, cascading deletes, webhooks)."
+                    "Assesses how clearly and completely the description explains what the endpoint does when invoked — the what of its operational behavior"
                 ),
                 score_criteria={
-                    ScoreLevel.POOR: "Merely restates the HTTP method and path (e.g., 'Posts a user') with no explanation of the actual outcome.",
-                    ScoreLevel.FAIR: "Mentions the primary action vaguely, but provides no details on exactly what data is modified or if side effects occur.",
-                    ScoreLevel.GOOD: "Clearly explains the main action and immediate data returned/modified, but ignores secondary system impacts.",
-                    ScoreLevel.VERY_GOOD: "Explains the main action clearly and mentions key side effects or asynchronous behaviors triggered by the request.",
-                    ScoreLevel.EXCELLENT: "Comprehensively explains the primary action AND maps out all hidden state changes, asynchronous jobs, or downstream notifications.",
+                    ScoreLevel.POOR: "Merely restates the HTTP method and path with no explanation of actual behavior or outcome.",
+                    ScoreLevel.FAIR: "Mentions the primary action vaguely without specifying what data is modified, returned, or affected.",
+                    ScoreLevel.GOOD: "Clearly explains the primary action and its immediate outcome, but omits secondary system effects.",
+                    ScoreLevel.VERY_GOOD: "Explains the primary action and mentions key secondary effects or asynchronous behaviors triggered by the request.",
+                    ScoreLevel.EXCELLENT: "Comprehensively describes the primary action and all material secondary effects, giving the consumer a complete picture of the endpoint's behavioral contract.",
                 },
             ),
-            EvaluationAspect.PARAMETER_ATTRIBUTE_DESCRIPTION: AspectCriteria(
+        }
+        elif doc_type == DocType.SCHEMA.value:
+            
+            return {
+            EvaluationAspect.MOTIVATION: AspectCriteria(
                 description=(
-                    "Evaluate parameter and schema property descriptions for human-readable business context, "
-                    "cross-parameter dependencies, and property lifecycle. It MUST penalize descriptions that "
-                    "merely repeat strict JSON schema validation rules."
+                    "Assesses how effectively the description communicates the domain purpose of the data object — what real-world concept or system entity it represents and why it exists as a distinct model."
                 ),
                 score_criteria={
-                    ScoreLevel.POOR: "Solely repeats JSON schema validation rules (e.g., 'Must be a string of max length 10').",
-                    ScoreLevel.FAIR: "Adds slight business context but relies heavily on repeating technical limits already enforced by the schema.",
-                    ScoreLevel.GOOD: "Explains the domain meaning/business purpose of the property, but misses complex dependencies.",
-                    ScoreLevel.VERY_GOOD: "Explains the 'why' behind constraints, mentions read-only/immutability rules, and gives examples of valid states.",
-                    ScoreLevel.EXCELLENT: "Clearly defines business reasoning, documents complex cross-parameter dependencies (e.g., 'Required only if X is true'), and explains exact state transitions without redundant schema restatements.",
+                    ScoreLevel.POOR: "No indication of what the object represents or why it exists. The description merely restates the class name.",
+                    ScoreLevel.FAIR: "Identifies the object type in generic terms but provides no domain context or system role.",
+                    ScoreLevel.GOOD: "Clearly states what domain concept the object represents and its general role within the system.",
+                    ScoreLevel.VERY_GOOD: "Explains the object's domain purpose and provides context about when or how it is used within the system, as inferable from the source code.",
+                    ScoreLevel.EXCELLENT: "Provides a precise characterization of the domain concept modeled, its system role, and any notable constraints or behavioral properties — such as validation rules or state restrictions — that are directly evident from the source code.",
+                },
+            ),
+            EvaluationAspect.FUNCTIONALITY: AspectCriteria(
+                description=(
+                    "Assesses how clearly the description explains the structural and behavioral characteristics of the data object — what its fields represent, what constraints govern them, and any validation or transformation logic applied at the schema level"
+                ),
+                score_criteria={
+                    ScoreLevel.POOR: "No description of fields, constraints, or schema behavior.",
+                    ScoreLevel.FAIR: "Mentions fields superficially by restating their names or types without adding semantic meaning.",
+                    ScoreLevel.GOOD: "Explains the semantic meaning of the primary fields in human-readable terms beyond their type declarations.",
+                    ScoreLevel.VERY_GOOD: "Explains field semantics and captures key constraints or validation rules directly present in the source code.",
+                    ScoreLevel.EXCELLENT: "Accurately describes all significant fields, their semantic meaning, any validation constraints, cross-field dependencies, or state restrictions directly evident from the source code, giving the consumer a complete understanding of the data contract.",
+                },
+            ),
+        }
+        else:
+            return {
+            EvaluationAspect.MOTIVATION: AspectCriteria(
+                description=(
+                    "Assesses how effectively the description communicates the purpose of the parameter from the perspective of an API consumer — what the parameter controls or enables, and why a caller would need to provide it."
+                ),
+                score_criteria={
+                    ScoreLevel.POOR: "No indication of purpose. The description merely restates the parameter name or type.",
+                    ScoreLevel.FAIR: "Vaguely states that the parameter is used by the endpoint without explaining what it controls or enables.",
+                    ScoreLevel.GOOD: "Clearly states what the parameter controls or enables in the context of the endpoint's behavior.",
+                    ScoreLevel.VERY_GOOD: "Explains the parameter's role and provides context about its effect on the endpoint's behavior or output.",
+                    ScoreLevel.EXCELLENT: "Precisely articulates the parameter's role, its effect on endpoint behavior, and any notable constraints or conditional behavior directly inferable from the source code.",
+                },
+            ),
+            EvaluationAspect.FUNCTIONALITY: AspectCriteria(
+                description=(
+                    "Assesses how accurately and completely the description characterizes the parameter's constraints, valid values, and behavioral implications — the what of how the parameter behaves within the endpoint."
+                ),
+                score_criteria={
+                    ScoreLevel.POOR: "Solely restates the parameter type or copies the validation rule verbatim with no semantic explanation.",
+                    ScoreLevel.FAIR: "Adds slight context beyond the type but relies heavily on restating technical constraints already visible in the schema.",
+                    ScoreLevel.GOOD: "Explains the semantic meaning of the parameter's constraints or valid values in human-readable terms.",
+                    ScoreLevel.VERY_GOOD: "Explains constraint semantics and captures any default behavior, optional versus required distinction, or conditional usage directly inferable from the source code.",
+                    ScoreLevel.EXCELLENT: "Comprehensively describes the parameter's constraints, their semantic meaning, any cross-parameter dependencies, and the behavioral implications of different values, as directly inferable from the source code.",
                 },
             ),
         }
